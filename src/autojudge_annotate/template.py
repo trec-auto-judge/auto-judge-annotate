@@ -17,6 +17,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .topbar input[type=text]::placeholder { color: #aaa; }
 .username-banner { display: none; background: #e74c3c; color: #fff; text-align: center; padding: 8px; font-weight: 600; font-size: 13px; }
 .username-banner.visible { display: block; }
+.topbar select { padding: 4px 8px; border: 1px solid #555; border-radius: 4px; background: #3d5166; color: #fff; font-size: 13px; }
 .topbar .dataset-label { margin-left: auto; font-size: 12px; opacity: 0.7; }
 
 /* Layout */
@@ -27,10 +28,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* Sidebar */
 .sidebar h3 { font-size: 13px; text-transform: uppercase; color: #888; margin: 12px 0 6px 0; letter-spacing: 0.5px; }
 .sidebar h3:first-child { margin-top: 0; }
-.topic-item, .run-item { padding: 6px 10px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
-.topic-item:hover, .run-item:hover { background: #e0e4ed; }
+.topic-item, .run-item, .doc-item { padding: 6px 10px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+.topic-item:hover, .run-item:hover, .doc-item:hover { background: #e0e4ed; }
 .topic-item.active { background: #3498db; color: #fff; }
 .run-item.active { background: #3498db; color: #fff; }
+.doc-item.active { background: #3498db; color: #fff; }
+.doc-item .checkmark { margin-left: auto; color: #27ae60; font-weight: bold; }
+.run-item .progress { font-size: 11px; opacity: 0.7; margin-left: auto; }
 .topic-item .progress { font-size: 11px; opacity: 0.7; margin-left: auto; }
 .run-item .checkmark { margin-left: auto; color: #27ae60; font-weight: bold; }
 
@@ -44,9 +48,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .report-section { margin-bottom: 24px; }
 .report-section h2 { font-size: 16px; margin-bottom: 12px; color: #2c3e50; }
 .report-text { line-height: 1.8; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 6px; position: relative; user-select: text; white-space: pre-wrap; }
-.report-text mark { background: #ffeaa7; border-radius: 2px; position: relative; cursor: pointer; }
-.report-text mark .remove-span { display: none; position: absolute; top: -8px; right: -6px; width: 16px; height: 16px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 10px; line-height: 16px; text-align: center; cursor: pointer; z-index: 10; }
-.report-text mark:hover .remove-span { display: block; }
+.report-text mark { background: #ffeaa7; border-radius: 2px; cursor: pointer; }
+.report-text mark .remove-span { display: none; width: 14px; height: 14px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; vertical-align: top; margin-left: 1px; }
+.report-text mark:hover .remove-span { display: inline-block; }
 .citation-marker { color: #2980b9; font-size: 12px; cursor: pointer; vertical-align: super; font-weight: 600; }
 .citation-marker:hover { text-decoration: underline; }
 
@@ -97,6 +101,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 <div class="topbar">
   <label for="username-input">Username:</label>
   <input type="text" id="username-input" placeholder="Enter your name...">
+  <label for="mode-select">Mode:</label>
+  <select id="mode-select">
+    <option value="reports">Reports</option>
+    <option value="documents">Documents</option>
+  </select>
   <span class="dataset-label" id="dataset-label"></span>
 </div>
 <div class="username-banner" id="username-banner">Please enter a username above before annotating.</div>
@@ -105,8 +114,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   <div class="sidebar" id="sidebar">
     <h3>Topics</h3>
     <div id="topic-list"></div>
-    <h3>Runs</h3>
+    <h3 id="run-list-header">Runs</h3>
     <div id="run-list"></div>
+    <h3 id="doc-list-header" style="display:none">Documents</h3>
+    <div id="doc-list"></div>
     <button class="clear-all-btn" id="clear-all-btn">Clear all annotations</button>
   </div>
   <div class="main-panel" id="main-panel">
@@ -136,7 +147,9 @@ if (!DATA) { document.body.innerHTML = "<p>Error: No data embedded.</p>"; return
 var state = {
   selectedTopic: null,
   selectedRun: null,
-  annotations: {}   // key = "topicId|runId" -> {rating, comment, spans: [{start,end,text}]}
+  selectedDoc: null,
+  mode: "reports",   // "reports" or "documents"
+  annotations: {}   // key = "topicId|runId" or "topicId|docId" -> {topicId, runId/docId, rating, comment, spans}
 };
 
 // DOM refs
@@ -150,16 +163,33 @@ var modalTitle = document.getElementById("modal-title");
 var modalUrl = document.getElementById("modal-url");
 var modalText = document.getElementById("modal-text");
 var modalClose = document.getElementById("modal-close");
+var modeSelect = document.getElementById("mode-select");
+var docListHeader = document.getElementById("doc-list-header");
+var docList = document.getElementById("doc-list");
+var runListHeader = document.getElementById("run-list-header");
 
 // Index data
 var requestMap = {};  // request_id -> request
 var reportIndex = {}; // topic_id -> {run_id -> report}
 var topicIds = [];
+var docIndex = {};    // topic_id -> {doc_id -> document obj} (union across all runs)
+var runDocsIndex = {}; // topic_id -> {run_id -> [doc_id, ...]} (docs per run)
 
 DATA.requests.forEach(function(r) { requestMap[r.request_id] = r; });
 DATA.reports.forEach(function(r) {
   if (!reportIndex[r.topic_id]) reportIndex[r.topic_id] = {};
   reportIndex[r.topic_id][r.run_id] = r;
+  // Build docIndex and runDocsIndex
+  if (r.documents) {
+    if (!docIndex[r.topic_id]) docIndex[r.topic_id] = {};
+    if (!runDocsIndex[r.topic_id]) runDocsIndex[r.topic_id] = {};
+    var runDocIds = [];
+    Object.keys(r.documents).forEach(function(docId) {
+      docIndex[r.topic_id][docId] = r.documents[docId];
+      runDocIds.push(docId);
+    });
+    runDocsIndex[r.topic_id][r.run_id] = runDocIds.sort();
+  }
 });
 topicIds = DATA.requests.map(function(r) { return r.request_id; });
 
@@ -185,28 +215,99 @@ usernameInput.addEventListener("input", function() {
 // Load saved annotations from localStorage
 var savedAnnotations = localStorage.getItem("autojudge_annotate_state_" + DATA.dataset);
 if (savedAnnotations) {
-  try { state.annotations = JSON.parse(savedAnnotations); } catch(e) { state.annotations = {}; }
+  try {
+    var loaded = JSON.parse(savedAnnotations);
+    // Migrate old-format keys ("topicId|runId") to new format ("r|topicId|runId")
+    Object.keys(loaded).forEach(function(key) {
+      if (key.indexOf("r|") === 0 || key.indexOf("d|") === 0) {
+        // Already new format
+        state.annotations[key] = loaded[key];
+      } else {
+        // Old format: "topicId|runId"
+        var parts = key.split("|");
+        var newKey = "r|" + key;
+        var ann = loaded[key];
+        ann.topicId = ann.topicId || parts[0];
+        ann.runId = ann.runId || parts[1];
+        state.annotations[newKey] = ann;
+      }
+    });
+  } catch(e) { state.annotations = {}; }
 }
+
+// Load saved mode from localStorage
+var savedMode = localStorage.getItem("autojudge_annotate_mode_" + DATA.dataset);
+if (savedMode === "reports" || savedMode === "documents") {
+  state.mode = savedMode;
+}
+modeSelect.value = state.mode;
+
+modeSelect.addEventListener("change", function() {
+  state.mode = modeSelect.value;
+  if (state.mode === "documents") {
+    // Ensure a run is selected (keep current or pick first)
+    if (state.selectedTopic) {
+      var availableRuns = reportIndex[state.selectedTopic] ? Object.keys(reportIndex[state.selectedTopic]).sort() : [];
+      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
+        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
+      }
+      // Auto-select first document of the run
+      if (state.selectedRun && runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][state.selectedRun]) {
+        var docs = runDocsIndex[state.selectedTopic][state.selectedRun];
+        state.selectedDoc = docs.length > 0 ? docs[0] : null;
+      } else {
+        state.selectedDoc = null;
+      }
+    }
+  } else {
+    state.selectedDoc = null;
+  }
+  localStorage.setItem("autojudge_annotate_mode_" + DATA.dataset, state.mode);
+  renderSidebar();
+  renderMain();
+});
 
 // --- Annotation helpers ---
 
-function annotationKey(topicId, runId) { return topicId + "|" + runId; }
+function reportAnnotationKey(topicId, runId) { return "r|" + topicId + "|" + runId; }
+function docAnnotationKey(topicId, docId) { return "d|" + topicId + "|" + docId; }
 
-function getAnnotation(topicId, runId) {
-  var key = annotationKey(topicId, runId);
+function getReportAnnotation(topicId, runId) {
+  var key = reportAnnotationKey(topicId, runId);
   if (!state.annotations[key]) {
-    state.annotations[key] = { rating: "Not rated", comment: "", spans: [] };
+    state.annotations[key] = { topicId: topicId, runId: runId, rating: "Not rated", comment: "", spans: [] };
   }
   return state.annotations[key];
 }
 
+function getDocAnnotation(topicId, docId) {
+  var key = docAnnotationKey(topicId, docId);
+  if (!state.annotations[key]) {
+    state.annotations[key] = { topicId: topicId, docId: docId, rating: "Not rated", comment: "", spans: [] };
+  }
+  return state.annotations[key];
+}
+
+// Backwards compat: old annotations without topicId/runId fields
+function getAnnotation(topicId, runId) { return getReportAnnotation(topicId, runId); }
+
 function currentAnnotation() {
+  if (state.mode === "documents") {
+    if (!state.selectedTopic || !state.selectedDoc) return null;
+    return getDocAnnotation(state.selectedTopic, state.selectedDoc);
+  }
   if (!state.selectedTopic || !state.selectedRun) return null;
-  return getAnnotation(state.selectedTopic, state.selectedRun);
+  return getReportAnnotation(state.selectedTopic, state.selectedRun);
 }
 
 function isAnnotated(topicId, runId) {
-  var ann = state.annotations[annotationKey(topicId, runId)];
+  var ann = state.annotations[reportAnnotationKey(topicId, runId)];
+  if (!ann) return false;
+  return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
+}
+
+function isDocAnnotated(topicId, docId) {
+  var ann = state.annotations[docAnnotationKey(topicId, docId)];
   if (!ann) return false;
   return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
 }
@@ -245,28 +346,58 @@ function buildOutputLines() {
   Object.keys(state.annotations).forEach(function(key) {
     var ann = state.annotations[key];
     if (!isAnnotatedByKey(key)) return;
-    var parts = key.split("|");
-    var topicId = parts[0];
-    var runId = parts[1];
-    var report = reportIndex[topicId] && reportIndex[topicId][runId];
-    if (!report) return;
-    var obj = {
-      dataset: DATA.dataset,
-      request_id: topicId,
-      run_id: runId,
-      team_id: report.team_id,
-      topic_id: topicId,
-      username: username || "",
-      rating: ann.rating,
-      comment: ann.comment,
-      spans: ann.spans.map(function(s) {
-        var o = { start: s.start, end: s.end, text: s.text };
-        if (s.sentence_idx !== undefined) o.sentence_idx = s.sentence_idx;
-        return o;
-      }),
-      report: report
-    };
-    lines.push(JSON.stringify(obj));
+
+    // Determine if this is a report or document annotation via ann fields
+    if (ann.docId !== undefined) {
+      // Document annotation
+      var topicId = ann.topicId;
+      var docId = ann.docId;
+      var doc = docIndex[topicId] && docIndex[topicId][docId];
+      if (!doc) return;
+      var obj = {
+        dataset: DATA.dataset,
+        request_id: topicId,
+        docid: docId,
+        topic_id: topicId,
+        username: username || "",
+        rating: ann.rating,
+        comment: ann.comment,
+        spans: ann.spans.map(function(s) {
+          return { start: s.start, end: s.end, text: s.text };
+        }),
+        document: doc
+      };
+      lines.push(JSON.stringify(obj));
+    } else {
+      // Report annotation
+      var topicId = ann.topicId;
+      var runId = ann.runId;
+      // Backwards compat: old annotations may not have topicId/runId fields
+      if (!topicId || !runId) {
+        var parts = key.split("|");
+        topicId = topicId || parts[1] || parts[0];
+        runId = runId || parts[2] || parts[1];
+      }
+      var report = reportIndex[topicId] && reportIndex[topicId][runId];
+      if (!report) return;
+      var obj = {
+        dataset: DATA.dataset,
+        request_id: topicId,
+        run_id: runId,
+        team_id: report.team_id,
+        topic_id: topicId,
+        username: username || "",
+        rating: ann.rating,
+        comment: ann.comment,
+        spans: ann.spans.map(function(s) {
+          var o = { start: s.start, end: s.end, text: s.text };
+          if (s.sentence_idx !== undefined) o.sentence_idx = s.sentence_idx;
+          return o;
+        }),
+        report: report
+      };
+      lines.push(JSON.stringify(obj));
+    }
   });
   return lines;
 }
@@ -280,80 +411,195 @@ function escapeHtml(str) {
 }
 
 function updateSidebarCounts() {
-  // Update topic progress counts and run checkmarks without full re-render
-  topicIds.forEach(function(tid) {
-    var countEl = document.getElementById("topic-count-" + tid);
-    if (countEl) {
-      var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
-      var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
-      countEl.textContent = "(" + done + "/" + runs.length + ")";
-    }
-  });
-  if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-    Object.keys(reportIndex[state.selectedTopic]).forEach(function(rid) {
-      var checkEl = document.getElementById("run-check-" + rid);
-      if (checkEl) {
-        checkEl.innerHTML = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
+  if (state.mode === "documents") {
+    // Document mode: topic counter = unique annotated docs / total unique docs
+    topicIds.forEach(function(tid) {
+      var countEl = document.getElementById("topic-count-" + tid);
+      if (countEl) {
+        var allDocs = docIndex[tid] ? Object.keys(docIndex[tid]) : [];
+        var done = allDocs.filter(function(did) { return isDocAnnotated(tid, did); }).length;
+        countEl.textContent = "(" + done + "/" + allDocs.length + ")";
       }
     });
+    // Run counter = annotated docs / total docs for that run
+    if (state.selectedTopic && runDocsIndex[state.selectedTopic]) {
+      Object.keys(runDocsIndex[state.selectedTopic]).forEach(function(rid) {
+        var countEl = document.getElementById("run-count-" + CSS.escape(rid));
+        if (countEl) {
+          var docs = runDocsIndex[state.selectedTopic][rid] || [];
+          var done = docs.filter(function(did) { return isDocAnnotated(state.selectedTopic, did); }).length;
+          countEl.textContent = "(" + done + "/" + docs.length + ")";
+        }
+      });
+    }
+    // Doc checkmarks
+    if (state.selectedTopic && state.selectedRun && runDocsIndex[state.selectedTopic]) {
+      var docs = runDocsIndex[state.selectedTopic][state.selectedRun] || [];
+      docs.forEach(function(did) {
+        var checkEl = document.getElementById("doc-check-" + CSS.escape(did));
+        if (checkEl) {
+          checkEl.innerHTML = isDocAnnotated(state.selectedTopic, did) ? "&#10003;" : "";
+        }
+      });
+    }
+  } else {
+    // Report mode: topic counter = annotated runs / total runs
+    topicIds.forEach(function(tid) {
+      var countEl = document.getElementById("topic-count-" + tid);
+      if (countEl) {
+        var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
+        var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
+        countEl.textContent = "(" + done + "/" + runs.length + ")";
+      }
+    });
+    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
+      Object.keys(reportIndex[state.selectedTopic]).forEach(function(rid) {
+        var checkEl = document.getElementById("run-check-" + CSS.escape(rid));
+        if (checkEl) {
+          checkEl.innerHTML = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
+        }
+      });
+    }
   }
+}
+
+function abbreviateDocId(docId) {
+  if (docId.length > 30) return docId.substring(0, 27) + "\u2026";
+  return docId;
 }
 
 function renderSidebar() {
   topicList.innerHTML = "";
-  topicIds.forEach(function(tid) {
-    var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-    var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
-
-    var el = document.createElement("div");
-    el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
-    el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + done + "/" + runs.length + ")</span>";
-    el.addEventListener("click", function() {
-      state.selectedTopic = tid;
-      // Keep current run if it exists for the new topic, otherwise fall back to first
-      var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-      if (state.selectedRun && availableRuns.indexOf(state.selectedRun) === -1) {
-        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-      } else if (!state.selectedRun && availableRuns.length > 0) {
-        state.selectedRun = availableRuns[0];
-      }
-      renderSidebar();
-      renderMain();
-    });
-    topicList.appendChild(el);
-  });
-
   runList.innerHTML = "";
-  if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-    var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
-    runs.forEach(function(rid) {
-      var report = reportIndex[state.selectedTopic][rid];
+  docList.innerHTML = "";
+
+  if (state.mode === "documents") {
+    runListHeader.textContent = "Runs";
+    docListHeader.style.display = "";
+
+    // Topics: counter = unique annotated docs / total unique docs
+    topicIds.forEach(function(tid) {
+      var allDocs = docIndex[tid] ? Object.keys(docIndex[tid]) : [];
+      var done = allDocs.filter(function(did) { return isDocAnnotated(tid, did); }).length;
+
       var el = document.createElement("div");
-      el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
-      var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
-      var checkContent = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
-      el.innerHTML = label + '<span class="checkmark" id="run-check-' + escapeHtml(rid) + '">' + checkContent + '</span>';
+      el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
+      el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + done + "/" + allDocs.length + ")</span>";
       el.addEventListener("click", function() {
-        state.selectedRun = rid;
+        state.selectedTopic = tid;
+        var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
+        if (state.selectedRun && availableRuns.indexOf(state.selectedRun) === -1) {
+          state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
+        } else if (!state.selectedRun && availableRuns.length > 0) {
+          state.selectedRun = availableRuns[0];
+        }
+        // Auto-select first doc for the run
+        if (state.selectedRun && runDocsIndex[tid] && runDocsIndex[tid][state.selectedRun]) {
+          state.selectedDoc = runDocsIndex[tid][state.selectedRun][0] || null;
+        } else {
+          state.selectedDoc = null;
+        }
         renderSidebar();
         renderMain();
       });
-      runList.appendChild(el);
+      topicList.appendChild(el);
     });
+
+    // Runs: counter = annotated docs / total docs for this run
+    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
+      var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
+      runs.forEach(function(rid) {
+        var report = reportIndex[state.selectedTopic][rid];
+        var docs = (runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][rid]) || [];
+        var done = docs.filter(function(did) { return isDocAnnotated(state.selectedTopic, did); }).length;
+
+        var el = document.createElement("div");
+        el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
+        var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
+        el.innerHTML = label + '<span class="progress" id="run-count-' + CSS.escape(rid) + '">(' + done + "/" + docs.length + ")</span>";
+        el.addEventListener("click", function() {
+          state.selectedRun = rid;
+          // Auto-select first doc
+          var rdocs = (runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][rid]) || [];
+          state.selectedDoc = rdocs.length > 0 ? rdocs[0] : null;
+          renderSidebar();
+          renderMain();
+        });
+        runList.appendChild(el);
+      });
+    }
+
+    // Documents: checkmark per doc
+    if (state.selectedTopic && state.selectedRun && runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][state.selectedRun]) {
+      var docs = runDocsIndex[state.selectedTopic][state.selectedRun];
+      docs.forEach(function(did) {
+        var el = document.createElement("div");
+        el.className = "doc-item" + (state.selectedDoc === did ? " active" : "");
+        var displayId = abbreviateDocId(did);
+        var checkContent = isDocAnnotated(state.selectedTopic, did) ? "&#10003;" : "";
+        el.innerHTML = escapeHtml(displayId) + '<span class="checkmark" id="doc-check-' + CSS.escape(did) + '">' + checkContent + '</span>';
+        el.title = did;
+        el.addEventListener("click", function() {
+          state.selectedDoc = did;
+          renderSidebar();
+          renderMain();
+        });
+        docList.appendChild(el);
+      });
+    }
+
+  } else {
+    // Report mode (unchanged logic)
+    runListHeader.textContent = "Runs";
+    docListHeader.style.display = "none";
+
+    topicIds.forEach(function(tid) {
+      var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
+      var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
+
+      var el = document.createElement("div");
+      el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
+      el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + done + "/" + runs.length + ")</span>";
+      el.addEventListener("click", function() {
+        state.selectedTopic = tid;
+        var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
+        if (state.selectedRun && availableRuns.indexOf(state.selectedRun) === -1) {
+          state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
+        } else if (!state.selectedRun && availableRuns.length > 0) {
+          state.selectedRun = availableRuns[0];
+        }
+        renderSidebar();
+        renderMain();
+      });
+      topicList.appendChild(el);
+    });
+
+    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
+      var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
+      runs.forEach(function(rid) {
+        var report = reportIndex[state.selectedTopic][rid];
+        var el = document.createElement("div");
+        el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
+        var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
+        var checkContent = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
+        el.innerHTML = label + '<span class="checkmark" id="run-check-' + CSS.escape(rid) + '">' + checkContent + '</span>';
+        el.addEventListener("click", function() {
+          state.selectedRun = rid;
+          renderSidebar();
+          renderMain();
+        });
+        runList.appendChild(el);
+      });
+    }
   }
 }
 
 // --- Main panel ---
 
-function renderMain() {
-  if (!state.selectedTopic) {
-    mainPanel.innerHTML = '<div class="empty-state">Select a topic from the sidebar to begin.</div>';
-    return;
-  }
-
-  var request = requestMap[state.selectedTopic];
+function renderRequestSection(topicId) {
+  var request = requestMap[topicId];
   var html = '<div class="request-section">';
-  html += "<h2>Request: " + escapeHtml(state.selectedTopic) + "</h2>";
+  html += "<h2>Request: " + escapeHtml(topicId) + "</h2>";
   if (request) {
     html += '<div class="field-label">Title</div>';
     html += '<div class="field-value">' + escapeHtml(request.title || "") + "</div>";
@@ -367,26 +613,11 @@ function renderMain() {
     }
   }
   html += "</div>";
+  return html;
+}
 
-  if (!state.selectedRun) {
-    html += '<div class="empty-state">Select a run from the sidebar.</div>';
-    mainPanel.innerHTML = html;
-    return;
-  }
-
-  var report = reportIndex[state.selectedTopic][state.selectedRun];
-  if (!report) {
-    html += '<div class="empty-state">Report not found.</div>';
-    mainPanel.innerHTML = html;
-    return;
-  }
-
-  var ann = getAnnotation(state.selectedTopic, state.selectedRun);
-
-  html += '<div class="report-section">';
-  html += "<h2>Report: " + escapeHtml(report.run_id) + " by " + escapeHtml(report.team_id) + "</h2>";
-  html += '<div class="report-text" id="report-text"></div>';
-  html += "</div>";
+function renderAnnotationControls(ann) {
+  var html = '';
 
   // Spans list
   html += '<div class="spans-section"><h3>Selected Spans</h3><div id="spans-display"></div></div>';
@@ -409,22 +640,12 @@ function renderMain() {
   html += '<textarea id="output-area" readonly></textarea>';
   html += '<button class="download-btn" id="download-btn">Download JSONL</button></div>';
 
-  mainPanel.innerHTML = html;
+  return html;
+}
 
-  // Populate output area
-  var outputArea = document.getElementById("output-area");
-  outputArea.value = buildOutputLines().join("\n");
-
-  // Build report text safely using DOM manipulation
-  var reportTextEl = document.getElementById("report-text");
-  buildReportText(reportTextEl, report);
-  applyHighlights(reportTextEl, ann.spans);
-
-  // Attach event handlers
-  reportTextEl.addEventListener("mouseup", handleSelection);
+function attachAnnotationHandlers() {
   document.getElementById("download-btn").addEventListener("click", handleDownload);
 
-  // Auto-save on rating change
   document.querySelectorAll('input[name="rating"]').forEach(function(radio) {
     radio.addEventListener("change", function() {
       var ann = currentAnnotation();
@@ -432,12 +653,107 @@ function renderMain() {
     });
   });
 
-  // Auto-save on comment change
   document.getElementById("comment-input").addEventListener("input", function() {
     var ann = currentAnnotation();
     if (ann) { ann.comment = this.value.trim(); autoSave(); }
   });
 
+  var outputArea = document.getElementById("output-area");
+  outputArea.value = buildOutputLines().join("\n");
+}
+
+function renderMain() {
+  if (!state.selectedTopic) {
+    mainPanel.innerHTML = '<div class="empty-state">Select a topic from the sidebar to begin.</div>';
+    return;
+  }
+
+  if (state.mode === "documents") {
+    renderMainDocMode();
+  } else {
+    renderMainReportMode();
+  }
+}
+
+function renderMainReportMode() {
+  var html = renderRequestSection(state.selectedTopic);
+
+  if (!state.selectedRun) {
+    html += '<div class="empty-state">Select a run from the sidebar.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var report = reportIndex[state.selectedTopic][state.selectedRun];
+  if (!report) {
+    html += '<div class="empty-state">Report not found.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var ann = getReportAnnotation(state.selectedTopic, state.selectedRun);
+
+  html += '<div class="report-section">';
+  html += "<h2>Report: " + escapeHtml(report.run_id) + " by " + escapeHtml(report.team_id) + "</h2>";
+  html += '<div class="report-text" id="report-text"></div>';
+  html += "</div>";
+
+  html += renderAnnotationControls(ann);
+  mainPanel.innerHTML = html;
+
+  // Build report text safely using DOM manipulation
+  var reportTextEl = document.getElementById("report-text");
+  buildReportText(reportTextEl, report);
+  applyHighlights(reportTextEl, ann.spans);
+  reportTextEl.addEventListener("mouseup", handleSelection);
+
+  attachAnnotationHandlers();
+  renderSpans();
+}
+
+function renderMainDocMode() {
+  var html = renderRequestSection(state.selectedTopic);
+
+  if (!state.selectedRun) {
+    html += '<div class="empty-state">Select a run from the sidebar.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  if (!state.selectedDoc) {
+    html += '<div class="empty-state">Select a document from the sidebar.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][state.selectedDoc];
+  if (!doc) {
+    html += '<div class="empty-state">Document not found.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var ann = getDocAnnotation(state.selectedTopic, state.selectedDoc);
+
+  html += '<div class="report-section">';
+  html += "<h2>Document: " + escapeHtml(state.selectedDoc) + "</h2>";
+  html += '<div class="report-text" id="report-text"></div>';
+  html += "</div>";
+
+  html += renderAnnotationControls(ann);
+  mainPanel.innerHTML = html;
+
+  // Build document text using DOM (plain text, no sentences/citations)
+  var reportTextEl = document.getElementById("report-text");
+  var docText = "";
+  if (doc.title) docText = doc.title + "\n\n";
+  docText += doc.text || "";
+  reportTextEl.textContent = docText;
+
+  applyHighlights(reportTextEl, ann.spans);
+  reportTextEl.addEventListener("mouseup", handleDocSelection);
+
+  attachAnnotationHandlers();
   renderSpans();
 }
 
@@ -454,8 +770,10 @@ function buildReportText(container, report) {
       sent.citations.forEach(function(cid) {
         var span = document.createElement("span");
         span.className = "citation-marker";
-        span.textContent = "[" + cid + "]";
+        var displayId = cid.length > 10 ? cid.substring(0, 4) + "\u2026" : cid;
+        span.textContent = "[" + displayId + "]";
         span.setAttribute("data-citation-id", cid);
+        span.title = cid;
         if (DATA.show_documents) {
           span.addEventListener("click", function(e) {
             e.stopPropagation();
@@ -580,10 +898,22 @@ function wrapRange(textNodes, nodeStarts, span, spanIndex) {
           ann.spans.splice(idx, 1);
           autoSave();
           var reportTextEl = document.getElementById("report-text");
-          var report = reportIndex[state.selectedTopic][state.selectedRun];
-          buildReportText(reportTextEl, report);
-          applyHighlights(reportTextEl, ann.spans);
-          reportTextEl.addEventListener("mouseup", handleSelection);
+          if (state.mode === "documents") {
+            var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][state.selectedDoc];
+            if (doc) {
+              var docText = "";
+              if (doc.title) docText = doc.title + "\n\n";
+              docText += doc.text || "";
+              reportTextEl.textContent = docText;
+              applyHighlights(reportTextEl, ann.spans);
+              reportTextEl.addEventListener("mouseup", handleDocSelection);
+            }
+          } else {
+            var report = reportIndex[state.selectedTopic][state.selectedRun];
+            buildReportText(reportTextEl, report);
+            applyHighlights(reportTextEl, ann.spans);
+            reportTextEl.addEventListener("mouseup", handleSelection);
+          }
           renderSpans();
         }
       });
@@ -634,6 +964,53 @@ function handleSelection() {
   buildReportText(reportTextEl, report);
   applyHighlights(reportTextEl, ann.spans);
   reportTextEl.addEventListener("mouseup", handleSelection);
+  renderSpans();
+}
+
+function handleDocSelection() {
+  var sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+  var reportTextEl = document.getElementById("report-text");
+  if (!reportTextEl) return;
+
+  var range = sel.getRangeAt(0);
+  if (!reportTextEl.contains(range.startContainer) || !reportTextEl.contains(range.endContainer)) return;
+
+  var selectedText = sel.toString().trim();
+  if (!selectedText) return;
+
+  var offset = computeOffset(reportTextEl, range);
+  if (offset === null) return;
+
+  var ann = currentAnnotation();
+  if (!ann) return;
+
+  // No sentence splitting for documents — just {start, end, text}
+  var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][state.selectedDoc];
+  if (!doc) return;
+
+  var docText = "";
+  if (doc.title) docText = doc.title + "\n\n";
+  docText += doc.text || "";
+
+  var spanText = docText.substring(offset.start, offset.end).trim();
+  if (!spanText) { sel.removeAllRanges(); return; }
+
+  // Avoid exact duplicates
+  var isDuplicate = ann.spans.some(function(s) { return s.start === offset.start && s.end === offset.end; });
+  if (isDuplicate) { sel.removeAllRanges(); return; }
+
+  ann.spans.push({ start: offset.start, end: offset.end, text: spanText });
+  ann.spans.sort(function(a, b) { return a.start - b.start; });
+
+  sel.removeAllRanges();
+  autoSave();
+
+  // Re-render highlights
+  reportTextEl.textContent = docText;
+  applyHighlights(reportTextEl, ann.spans);
+  reportTextEl.addEventListener("mouseup", handleDocSelection);
   renderSpans();
 }
 
@@ -758,11 +1135,17 @@ document.getElementById("clear-all-btn").addEventListener("click", function() {
   renderMain();
 });
 
-// Initial render — auto-select first topic and first run
+// Initial render — auto-select first topic, first run, and (in doc mode) first doc
 if (topicIds.length > 0) {
   state.selectedTopic = topicIds[0];
   var firstRuns = reportIndex[topicIds[0]] ? Object.keys(reportIndex[topicIds[0]]).sort() : [];
-  if (firstRuns.length > 0) state.selectedRun = firstRuns[0];
+  if (firstRuns.length > 0) {
+    state.selectedRun = firstRuns[0];
+    if (state.mode === "documents" && runDocsIndex[topicIds[0]] && runDocsIndex[topicIds[0]][firstRuns[0]]) {
+      var firstDocs = runDocsIndex[topicIds[0]][firstRuns[0]];
+      if (firstDocs.length > 0) state.selectedDoc = firstDocs[0];
+    }
+  }
 }
 renderSidebar();
 renderMain();
