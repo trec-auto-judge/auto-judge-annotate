@@ -94,6 +94,37 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 /* Empty state */
 .empty-state { color: #888; text-align: center; padding: 48px; }
+
+/* Sentence stepper */
+.sentence-stepper { margin-bottom: 20px; }
+.stepper-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.stepper-nav button { padding: 6px 14px; background: #3498db; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+.stepper-nav button:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+.sentence-display { line-height: 1.8; padding: 12px; background: #fffbe6; border: 2px solid #f1c40f; border-radius: 6px; user-select: text; white-space: pre-wrap; }
+.sentence-display mark { background: #ffd700; border-radius: 2px; cursor: pointer; }
+.sentence-display mark .remove-span { display: none; width: 14px; height: 14px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; vertical-align: top; margin-left: 1px; }
+.sentence-display mark:hover .remove-span { display: inline-block; }
+
+/* Citation tabs + doc display */
+.citation-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.citation-tab { padding: 4px 12px; border: 1px solid #ddd; border-radius: 4px 4px 0 0; background: #f5f6fa; cursor: pointer; font-size: 12px; }
+.citation-tab.active { background: #fff; border-bottom-color: #fff; font-weight: 600; }
+.no-citation-msg { color: #888; font-style: italic; padding: 12px; }
+.document-display { line-height: 1.8; padding: 12px; background: #f0f8ff; border: 1px solid #b0c4de; border-radius: 6px; user-select: text; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+.document-display mark { background: #87ceeb; border-radius: 2px; cursor: pointer; }
+.document-display mark .remove-span { display: none; width: 14px; height: 14px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; vertical-align: top; margin-left: 1px; }
+.document-display mark:hover .remove-span { display: inline-block; }
+
+/* Sentence sidebar items + dual span chips */
+.sent-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.sent-item:hover { background: #e0e4ed; }
+.sent-item.active { background: #3498db; color: #fff; }
+.sent-item .checkmark { margin-left: auto; color: #27ae60; font-weight: bold; }
+.sent-item .sent-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.sent-item .cite-count { font-size: 10px; opacity: 0.7; }
+.report-span-chip { display: inline-block; background: #ffeaa7; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
+.document-span-chip { display: inline-block; background: #b8e6ff; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -105,6 +136,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   <select id="mode-select">
     <option value="reports">Reports</option>
     <option value="documents">Documents</option>
+    <option value="citations">Citations</option>
   </select>
   <span class="dataset-label" id="dataset-label"></span>
 </div>
@@ -118,6 +150,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     <div id="run-list"></div>
     <h3 id="doc-list-header" style="display:none">Documents</h3>
     <div id="doc-list"></div>
+    <h3 id="sent-list-header" style="display:none">Sentences</h3>
+    <div id="sent-list"></div>
     <button class="clear-all-btn" id="clear-all-btn">Clear all annotations</button>
   </div>
   <div class="main-panel" id="main-panel">
@@ -148,8 +182,10 @@ var state = {
   selectedTopic: null,
   selectedRun: null,
   selectedDoc: null,
-  mode: "reports",   // "reports" or "documents"
-  annotations: {}   // key = "topicId|runId" or "topicId|docId" -> {topicId, runId/docId, rating, comment, spans}
+  selectedSentenceIdx: null,
+  selectedCitationIdx: null,
+  mode: "reports",   // "reports", "documents", or "citations"
+  annotations: {}   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
 };
 
 // DOM refs
@@ -167,6 +203,8 @@ var modeSelect = document.getElementById("mode-select");
 var docListHeader = document.getElementById("doc-list-header");
 var docList = document.getElementById("doc-list");
 var runListHeader = document.getElementById("run-list-header");
+var sentListHeader = document.getElementById("sent-list-header");
+var sentList = document.getElementById("sent-list");
 
 // Index data
 var requestMap = {};  // request_id -> request
@@ -219,7 +257,7 @@ if (savedAnnotations) {
     var loaded = JSON.parse(savedAnnotations);
     // Migrate old-format keys ("topicId|runId") to new format ("r|topicId|runId")
     Object.keys(loaded).forEach(function(key) {
-      if (key.indexOf("r|") === 0 || key.indexOf("d|") === 0) {
+      if (key.indexOf("r|") === 0 || key.indexOf("d|") === 0 || key.indexOf("c|") === 0) {
         // Already new format
         state.annotations[key] = loaded[key];
       } else {
@@ -237,7 +275,7 @@ if (savedAnnotations) {
 
 // Load saved mode from localStorage
 var savedMode = localStorage.getItem("autojudge_annotate_mode_" + DATA.dataset);
-if (savedMode === "reports" || savedMode === "documents") {
+if (savedMode === "reports" || savedMode === "documents" || savedMode === "citations") {
   state.mode = savedMode;
 }
 modeSelect.value = state.mode;
@@ -259,8 +297,23 @@ modeSelect.addEventListener("change", function() {
         state.selectedDoc = null;
       }
     }
+    state.selectedSentenceIdx = null;
+    state.selectedCitationIdx = null;
+  } else if (state.mode === "citations") {
+    // Ensure a run is selected
+    if (state.selectedTopic) {
+      var availableRuns = reportIndex[state.selectedTopic] ? Object.keys(reportIndex[state.selectedTopic]).sort() : [];
+      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
+        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
+      }
+    }
+    state.selectedSentenceIdx = 0;
+    state.selectedCitationIdx = 0;
+    state.selectedDoc = null;
   } else {
     state.selectedDoc = null;
+    state.selectedSentenceIdx = null;
+    state.selectedCitationIdx = null;
   }
   localStorage.setItem("autojudge_annotate_mode_" + DATA.dataset, state.mode);
   renderSidebar();
@@ -288,6 +341,36 @@ function getDocAnnotation(topicId, docId) {
   return state.annotations[key];
 }
 
+function citationAnnotationKey(topicId, runId, sentIdx, docId) {
+  if (docId) return "c|" + topicId + "|" + runId + "|" + sentIdx + "|" + docId;
+  return "c|" + topicId + "|" + runId + "|" + sentIdx;
+}
+
+function getCitationAnnotation(topicId, runId, sentIdx, docId) {
+  var key = citationAnnotationKey(topicId, runId, sentIdx, docId);
+  if (!state.annotations[key]) {
+    state.annotations[key] = { topicId: topicId, runId: runId, sentenceIdx: sentIdx, docId: docId || null, rating: "Not rated", comment: "", spans: [], reportSpans: [] };
+  }
+  return state.annotations[key];
+}
+
+function isCitationAnnotated(topicId, runId, sentIdx, docId) {
+  var key = citationAnnotationKey(topicId, runId, sentIdx, docId);
+  var ann = state.annotations[key];
+  if (!ann) return false;
+  return (ann.spans && ann.spans.length > 0) || (ann.reportSpans && ann.reportSpans.length > 0) || ann.rating !== "Not rated" || ann.comment !== "";
+}
+
+function isCitationSentenceComplete(topicId, runId, sentIdx) {
+  var report = reportIndex[topicId] && reportIndex[topicId][runId];
+  if (!report || !report.sentences || sentIdx >= report.sentences.length) return false;
+  var sent = report.sentences[sentIdx];
+  var citations = (sent.citations && sent.citations.length > 0) ? sent.citations : [null];
+  return citations.every(function(docId) {
+    return isCitationAnnotated(topicId, runId, sentIdx, docId);
+  });
+}
+
 // Backwards compat: old annotations without topicId/runId fields
 function getAnnotation(topicId, runId) { return getReportAnnotation(topicId, runId); }
 
@@ -295,6 +378,16 @@ function currentAnnotation() {
   if (state.mode === "documents") {
     if (!state.selectedTopic || !state.selectedDoc) return null;
     return getDocAnnotation(state.selectedTopic, state.selectedDoc);
+  }
+  if (state.mode === "citations") {
+    if (!state.selectedTopic || !state.selectedRun || state.selectedSentenceIdx === null) return null;
+    var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+    if (!report || !report.sentences || state.selectedSentenceIdx >= report.sentences.length) return null;
+    var sent = report.sentences[state.selectedSentenceIdx];
+    var citations = (sent.citations && sent.citations.length > 0) ? sent.citations : [null];
+    var citIdx = state.selectedCitationIdx || 0;
+    var docId = citations[citIdx] || null;
+    return getCitationAnnotation(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
   }
   if (!state.selectedTopic || !state.selectedRun) return null;
   return getReportAnnotation(state.selectedTopic, state.selectedRun);
@@ -337,6 +430,9 @@ function autoSave() {
 function isAnnotatedByKey(key) {
   var ann = state.annotations[key];
   if (!ann) return false;
+  if (key.indexOf("c|") === 0) {
+    return (ann.spans && ann.spans.length > 0) || (ann.reportSpans && ann.reportSpans.length > 0) || ann.rating !== "Not rated" || ann.comment !== "";
+  }
   return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
 }
 
@@ -347,8 +443,43 @@ function buildOutputLines() {
     var ann = state.annotations[key];
     if (!isAnnotatedByKey(key)) return;
 
-    // Determine if this is a report or document annotation via ann fields
-    if (ann.docId !== undefined) {
+    // Determine annotation type via key prefix
+    if (key.indexOf("c|") === 0) {
+      // Citation annotation
+      var topicId = ann.topicId;
+      var runId = ann.runId;
+      var sentIdx = ann.sentenceIdx;
+      var docId = ann.docId;
+      var report = reportIndex[topicId] && reportIndex[topicId][runId];
+      if (!report || !report.sentences || sentIdx >= report.sentences.length) return;
+      var sent = report.sentences[sentIdx];
+      var doc = null;
+      if (docId) {
+        doc = (report.documents && report.documents[docId]) || (docIndex[topicId] && docIndex[topicId][docId]) || null;
+      }
+      var obj = {
+        dataset: DATA.dataset,
+        request_id: topicId,
+        topic_id: topicId,
+        username: username || "",
+        rating: ann.rating,
+        comment: ann.comment,
+        spans: (ann.spans || []).map(function(s) {
+          return { start: s.start, end: s.end, text: s.text };
+        }),
+        report_spans: (ann.reportSpans || []).map(function(s) {
+          return { start: s.start, end: s.end, text: s.text };
+        }),
+        citation: {
+          report: report,
+          sentence_idx: sentIdx,
+          sentence: { text: sent.text, citations: sent.citations || [] },
+          docid: docId || null,
+          document: doc
+        }
+      };
+      lines.push(JSON.stringify(obj));
+    } else if (ann.docId !== undefined && key.indexOf("d|") === 0) {
       // Document annotation
       var topicId = ann.topicId;
       var docId = ann.docId;
@@ -410,7 +541,56 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function countCitationSentences(topicId, runId) {
+  var report = reportIndex[topicId] && reportIndex[topicId][runId];
+  if (!report || !report.sentences) return { done: 0, total: 0 };
+  var total = report.sentences.length;
+  var done = 0;
+  for (var i = 0; i < total; i++) {
+    if (isCitationSentenceComplete(topicId, runId, i)) done++;
+  }
+  return { done: done, total: total };
+}
+
 function updateSidebarCounts() {
+  if (state.mode === "citations") {
+    // Topic counters: done-sentences / total-sentences across all runs
+    topicIds.forEach(function(tid) {
+      var countEl = document.getElementById("topic-count-" + tid);
+      if (countEl) {
+        var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
+        var totalDone = 0, totalAll = 0;
+        runs.forEach(function(rid) {
+          var c = countCitationSentences(tid, rid);
+          totalDone += c.done; totalAll += c.total;
+        });
+        countEl.textContent = "(" + totalDone + "/" + totalAll + ")";
+      }
+    });
+    // Run counters
+    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
+      Object.keys(reportIndex[state.selectedTopic]).forEach(function(rid) {
+        var countEl = document.getElementById("run-count-" + CSS.escape(rid));
+        if (countEl) {
+          var c = countCitationSentences(state.selectedTopic, rid);
+          countEl.textContent = "(" + c.done + "/" + c.total + ")";
+        }
+      });
+    }
+    // Sentence checkmarks
+    if (state.selectedTopic && state.selectedRun) {
+      var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+      if (report && report.sentences) {
+        report.sentences.forEach(function(sent, idx) {
+          var checkEl = document.getElementById("sent-check-" + idx);
+          if (checkEl) {
+            checkEl.innerHTML = isCitationSentenceComplete(state.selectedTopic, state.selectedRun, idx) ? "&#10003;" : "";
+          }
+        });
+      }
+    }
+    return;
+  }
   if (state.mode === "documents") {
     // Document mode: topic counter = unique annotated docs / total unique docs
     topicIds.forEach(function(tid) {
@@ -468,14 +648,98 @@ function abbreviateDocId(docId) {
   return docId;
 }
 
+function renderSidebarCitationsMode() {
+  runListHeader.textContent = "Runs";
+  docListHeader.style.display = "none";
+  sentListHeader.style.display = "";
+
+  // Topics
+  topicIds.forEach(function(tid) {
+    var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
+    var totalDone = 0, totalAll = 0;
+    runs.forEach(function(rid) {
+      var c = countCitationSentences(tid, rid);
+      totalDone += c.done; totalAll += c.total;
+    });
+
+    var el = document.createElement("div");
+    el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
+    el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + totalDone + "/" + totalAll + ")</span>";
+    el.addEventListener("click", function() {
+      state.selectedTopic = tid;
+      var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
+      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
+        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
+      }
+      state.selectedSentenceIdx = 0;
+      state.selectedCitationIdx = 0;
+      renderSidebar();
+      renderMain();
+    });
+    topicList.appendChild(el);
+  });
+
+  // Runs
+  if (state.selectedTopic && reportIndex[state.selectedTopic]) {
+    var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
+    runs.forEach(function(rid) {
+      var report = reportIndex[state.selectedTopic][rid];
+      var c = countCitationSentences(state.selectedTopic, rid);
+
+      var el = document.createElement("div");
+      el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
+      var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
+      el.innerHTML = label + '<span class="progress" id="run-count-' + CSS.escape(rid) + '">(' + c.done + "/" + c.total + ")</span>";
+      el.addEventListener("click", function() {
+        state.selectedRun = rid;
+        state.selectedSentenceIdx = 0;
+        state.selectedCitationIdx = 0;
+        renderSidebar();
+        renderMain();
+      });
+      runList.appendChild(el);
+    });
+  }
+
+  // Sentences
+  if (state.selectedTopic && state.selectedRun) {
+    var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+    if (report && report.sentences) {
+      report.sentences.forEach(function(sent, idx) {
+        var el = document.createElement("div");
+        el.className = "sent-item" + (state.selectedSentenceIdx === idx ? " active" : "");
+        var preview = sent.text.length > 30 ? sent.text.substring(0, 30) + "\u2026" : sent.text;
+        var citeCount = (sent.citations && sent.citations.length > 0) ? sent.citations.length : 0;
+        var citeBadge = citeCount > 0 ? ' <span class="cite-count">[' + citeCount + "]</span>" : "";
+        var checkContent = isCitationSentenceComplete(state.selectedTopic, state.selectedRun, idx) ? "&#10003;" : "";
+        el.innerHTML = '<span class="sent-preview">s' + idx + " " + escapeHtml(preview) + "</span>" + citeBadge + '<span class="checkmark" id="sent-check-' + idx + '">' + checkContent + "</span>";
+        el.addEventListener("click", function() {
+          state.selectedSentenceIdx = idx;
+          state.selectedCitationIdx = 0;
+          renderSidebar();
+          renderMain();
+        });
+        sentList.appendChild(el);
+      });
+    }
+  }
+}
+
 function renderSidebar() {
   topicList.innerHTML = "";
   runList.innerHTML = "";
   docList.innerHTML = "";
+  sentList.innerHTML = "";
+
+  if (state.mode === "citations") {
+    renderSidebarCitationsMode();
+    return;
+  }
 
   if (state.mode === "documents") {
     runListHeader.textContent = "Runs";
     docListHeader.style.display = "";
+    sentListHeader.style.display = "none";
 
     // Topics: counter = unique annotated docs / total unique docs
     topicIds.forEach(function(tid) {
@@ -552,6 +816,7 @@ function renderSidebar() {
     // Report mode (unchanged logic)
     runListHeader.textContent = "Runs";
     docListHeader.style.display = "none";
+    sentListHeader.style.display = "none";
 
     topicIds.forEach(function(tid) {
       var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
@@ -662,13 +927,262 @@ function attachAnnotationHandlers() {
   outputArea.value = buildOutputLines().join("\n");
 }
 
+function renderAnnotationControlsNoDualSpans(ann) {
+  // Like renderAnnotationControls but without the spans section (citations mode handles spans separately)
+  var html = '';
+
+  // Rating
+  html += '<div class="rating-section"><h3>Rating</h3><div class="rating-options">';
+  ["Not rated", "Perfect", "Mostly Good", "So-so", "Bad"].forEach(function(r) {
+    var checked = (ann.rating === r) ? " checked" : "";
+    html += '<label><input type="radio" name="rating" value="' + escapeHtml(r) + '"' + checked + '><span>' + escapeHtml(r) + "</span></label>";
+  });
+  html += "</div></div>";
+
+  // Comment
+  html += '<div class="comment-section"><h3>Comments</h3>';
+  html += '<textarea id="comment-input" placeholder="Optional comments...">' + escapeHtml(ann.comment) + '</textarea></div>';
+
+  // Output section
+  var annotatedCount = Object.keys(state.annotations).filter(function(k) { return isAnnotatedByKey(k); }).length;
+  html += '<div class="output-section"><h3 id="output-header">JSONL Output (' + annotatedCount + ' annotations)</h3>';
+  html += '<textarea id="output-area" readonly></textarea>';
+  html += '<button class="download-btn" id="download-btn">Download JSONL</button></div>';
+
+  return html;
+}
+
+function renderMainCitationsMode() {
+  var html = renderRequestSection(state.selectedTopic);
+
+  if (!state.selectedRun) {
+    html += '<div class="empty-state">Select a run from the sidebar.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+  if (!report || !report.sentences || report.sentences.length === 0) {
+    html += '<div class="empty-state">No sentences in this report.</div>';
+    mainPanel.innerHTML = html;
+    return;
+  }
+
+  var sentIdx = state.selectedSentenceIdx || 0;
+  if (sentIdx >= report.sentences.length) sentIdx = 0;
+  var sent = report.sentences[sentIdx];
+  var citations = (sent.citations && sent.citations.length > 0) ? sent.citations : [null];
+  var citIdx = state.selectedCitationIdx || 0;
+  if (citIdx >= citations.length) citIdx = 0;
+  var docId = citations[citIdx];
+
+  var ann = getCitationAnnotation(state.selectedTopic, state.selectedRun, sentIdx, docId);
+
+  // Sentence stepper
+  html += '<div class="sentence-stepper">';
+  html += '<div class="stepper-nav">';
+  html += '<button id="prev-sent-btn"' + (sentIdx === 0 ? " disabled" : "") + '>&lt; Prev</button>';
+  html += '<strong>Sentence ' + (sentIdx + 1) + ' of ' + report.sentences.length + '</strong>';
+  html += '<button id="next-sent-btn"' + (sentIdx >= report.sentences.length - 1 ? " disabled" : "") + '>Next &gt;</button>';
+  html += '</div>';
+
+  // Sentence text
+  html += '<div class="sentence-display" id="sentence-text"></div>';
+  html += '</div>';
+
+  // Citation tabs + document
+  if (docId !== null) {
+    if (citations.length > 1) {
+      html += '<div class="citation-tabs" id="citation-tabs">';
+      citations.forEach(function(cid, i) {
+        var activeClass = (i === citIdx) ? " active" : "";
+        var displayId = cid ? (cid.length > 15 ? cid.substring(0, 12) + "\u2026" : cid) : "none";
+        html += '<div class="citation-tab' + activeClass + '" data-cit-idx="' + i + '">' + escapeHtml(displayId) + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<h3 style="margin: 8px 0 4px 0; font-size: 14px; color: #555;">Document: ' + escapeHtml(docId) + '</h3>';
+    html += '<div class="document-display" id="document-text"></div>';
+  } else {
+    if (citations.length > 1) {
+      // Shouldn't happen (null means no citations), but handle gracefully
+      html += '<div class="citation-tabs" id="citation-tabs"></div>';
+    }
+    html += '<div class="no-citation-msg">No citations for this sentence.</div>';
+  }
+
+  // Dual spans display
+  html += '<div class="spans-section" id="citation-spans-display"></div>';
+
+  html += renderAnnotationControlsNoDualSpans(ann);
+  mainPanel.innerHTML = html;
+
+  // Populate sentence text
+  var sentenceTextEl = document.getElementById("sentence-text");
+  sentenceTextEl.textContent = sent.text;
+  applyHighlights(sentenceTextEl, ann.reportSpans, function(idx) {
+    ann.reportSpans.splice(idx, 1);
+    autoSave();
+    renderMain();
+  });
+  sentenceTextEl.addEventListener("mouseup", function() {
+    handleCitationSentenceSelection(sentenceTextEl, ann);
+  });
+
+  // Populate document text
+  if (docId !== null) {
+    var docTextEl = document.getElementById("document-text");
+    var doc = (report.documents && report.documents[docId]) || (docIndex[state.selectedTopic] && docIndex[state.selectedTopic][docId]);
+    if (doc) {
+      var fullDocText = "";
+      if (doc.title) fullDocText = doc.title + "\n\n";
+      fullDocText += doc.text || "";
+      docTextEl.textContent = fullDocText;
+      applyHighlights(docTextEl, ann.spans, function(idx) {
+        ann.spans.splice(idx, 1);
+        autoSave();
+        renderMain();
+      });
+      docTextEl.addEventListener("mouseup", function() {
+        handleCitationDocSelection(docTextEl, ann, doc);
+      });
+    } else {
+      docTextEl.textContent = "Document not available.";
+    }
+  }
+
+  // Render dual span chips
+  renderCitationSpans(ann, docId !== null);
+
+  // Wire stepper buttons
+  document.getElementById("prev-sent-btn").addEventListener("click", function() {
+    if (sentIdx > 0) {
+      state.selectedSentenceIdx = sentIdx - 1;
+      state.selectedCitationIdx = 0;
+      renderSidebar();
+      renderMain();
+    }
+  });
+  document.getElementById("next-sent-btn").addEventListener("click", function() {
+    if (sentIdx < report.sentences.length - 1) {
+      state.selectedSentenceIdx = sentIdx + 1;
+      state.selectedCitationIdx = 0;
+      renderSidebar();
+      renderMain();
+    }
+  });
+
+  // Wire citation tabs
+  var tabsEl = document.getElementById("citation-tabs");
+  if (tabsEl) {
+    tabsEl.querySelectorAll(".citation-tab").forEach(function(tab) {
+      tab.addEventListener("click", function() {
+        state.selectedCitationIdx = parseInt(this.getAttribute("data-cit-idx"));
+        renderMain();
+      });
+    });
+  }
+
+  attachAnnotationHandlers();
+}
+
+function handleCitationSentenceSelection(container, ann) {
+  var sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+  var range = sel.getRangeAt(0);
+  if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return;
+
+  var selectedText = sel.toString().trim();
+  if (!selectedText) return;
+
+  var offset = computeOffset(container, range);
+  if (offset === null) return;
+
+  var spanText = container.textContent.substring(offset.start, offset.end).trim();
+  if (!spanText) { sel.removeAllRanges(); return; }
+
+  var isDuplicate = ann.reportSpans.some(function(s) { return s.start === offset.start && s.end === offset.end; });
+  if (isDuplicate) { sel.removeAllRanges(); return; }
+
+  ann.reportSpans.push({ start: offset.start, end: offset.end, text: spanText });
+  ann.reportSpans.sort(function(a, b) { return a.start - b.start; });
+
+  sel.removeAllRanges();
+  autoSave();
+  renderMain();
+}
+
+function handleCitationDocSelection(container, ann, doc) {
+  var sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+  var range = sel.getRangeAt(0);
+  if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return;
+
+  var selectedText = sel.toString().trim();
+  if (!selectedText) return;
+
+  var offset = computeOffset(container, range);
+  if (offset === null) return;
+
+  var fullDocText = "";
+  if (doc.title) fullDocText = doc.title + "\n\n";
+  fullDocText += doc.text || "";
+
+  var spanText = fullDocText.substring(offset.start, offset.end).trim();
+  if (!spanText) { sel.removeAllRanges(); return; }
+
+  var isDuplicate = ann.spans.some(function(s) { return s.start === offset.start && s.end === offset.end; });
+  if (isDuplicate) { sel.removeAllRanges(); return; }
+
+  ann.spans.push({ start: offset.start, end: offset.end, text: spanText });
+  ann.spans.sort(function(a, b) { return a.start - b.start; });
+
+  sel.removeAllRanges();
+  autoSave();
+  renderMain();
+}
+
+function renderCitationSpans(ann, hasCitations) {
+  var container = document.getElementById("citation-spans-display");
+  if (!container) return;
+  var html = '';
+
+  // Report spans (sentence side)
+  html += '<h3 style="font-size:14px;color:#555;margin-bottom:4px;">Report Spans</h3>';
+  if (ann.reportSpans && ann.reportSpans.length > 0) {
+    ann.reportSpans.forEach(function(sp) {
+      html += '<span class="report-span-chip">[' + sp.start + '-' + sp.end + '] ' + escapeHtml(sp.text) + '</span>';
+    });
+  } else {
+    html += '<span style="color:#888;font-size:12px;">No report spans selected.</span>';
+  }
+
+  // Document spans
+  if (hasCitations) {
+    html += '<h3 style="font-size:14px;color:#555;margin:8px 0 4px 0;">Document Spans</h3>';
+    if (ann.spans && ann.spans.length > 0) {
+      ann.spans.forEach(function(sp) {
+        html += '<span class="document-span-chip">[' + sp.start + '-' + sp.end + '] ' + escapeHtml(sp.text) + '</span>';
+      });
+    } else {
+      html += '<span style="color:#888;font-size:12px;">No document spans selected.</span>';
+    }
+  }
+
+  container.innerHTML = html;
+}
+
 function renderMain() {
   if (!state.selectedTopic) {
     mainPanel.innerHTML = '<div class="empty-state">Select a topic from the sidebar to begin.</div>';
     return;
   }
 
-  if (state.mode === "documents") {
+  if (state.mode === "citations") {
+    renderMainCitationsMode();
+  } else if (state.mode === "documents") {
     renderMainDocMode();
   } else {
     renderMainReportMode();
@@ -852,19 +1366,19 @@ function collectTextNodes(container) {
   return { textNodes: textNodes, nodeStarts: nodeStarts };
 }
 
-function applyHighlights(reportTextEl, spans) {
+function applyHighlights(container, spans, onRemove) {
   if (!spans || spans.length === 0) return;
 
   // Apply spans in reverse order to avoid invalidating offsets
   var sorted = spans.slice().sort(function(a, b) { return b.start - a.start; });
   sorted.forEach(function(sp) {
     var spanIndex = spans.indexOf(sp);
-    var info = collectTextNodes(reportTextEl);
-    wrapRange(info.textNodes, info.nodeStarts, sp, spanIndex);
+    var info = collectTextNodes(container);
+    wrapRange(info.textNodes, info.nodeStarts, sp, spanIndex, onRemove);
   });
 }
 
-function wrapRange(textNodes, nodeStarts, span, spanIndex) {
+function wrapRange(textNodes, nodeStarts, span, spanIndex, onRemove) {
   var isFirst = true;
   for (var i = 0; i < textNodes.length; i++) {
     var nodeStart = nodeStarts[i];
@@ -893,28 +1407,33 @@ function wrapRange(textNodes, nodeStarts, span, spanIndex) {
         e.stopPropagation();
         e.preventDefault();
         var idx = parseInt(this.getAttribute("data-span-index"));
-        var ann = currentAnnotation();
-        if (ann) {
-          ann.spans.splice(idx, 1);
-          autoSave();
-          var reportTextEl = document.getElementById("report-text");
-          if (state.mode === "documents") {
-            var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][state.selectedDoc];
-            if (doc) {
-              var docText = "";
-              if (doc.title) docText = doc.title + "\n\n";
-              docText += doc.text || "";
-              reportTextEl.textContent = docText;
+        if (onRemove) {
+          onRemove(idx);
+        } else {
+          // Default behavior for report/document modes
+          var ann = currentAnnotation();
+          if (ann) {
+            ann.spans.splice(idx, 1);
+            autoSave();
+            var reportTextEl = document.getElementById("report-text");
+            if (state.mode === "documents") {
+              var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][state.selectedDoc];
+              if (doc) {
+                var docText = "";
+                if (doc.title) docText = doc.title + "\n\n";
+                docText += doc.text || "";
+                reportTextEl.textContent = docText;
+                applyHighlights(reportTextEl, ann.spans);
+                reportTextEl.addEventListener("mouseup", handleDocSelection);
+              }
+            } else {
+              var report = reportIndex[state.selectedTopic][state.selectedRun];
+              buildReportText(reportTextEl, report);
               applyHighlights(reportTextEl, ann.spans);
-              reportTextEl.addEventListener("mouseup", handleDocSelection);
+              reportTextEl.addEventListener("mouseup", handleSelection);
             }
-          } else {
-            var report = reportIndex[state.selectedTopic][state.selectedRun];
-            buildReportText(reportTextEl, report);
-            applyHighlights(reportTextEl, ann.spans);
-            reportTextEl.addEventListener("mouseup", handleSelection);
+            renderSpans();
           }
-          renderSpans();
         }
       });
       mark.appendChild(removeBtn);
@@ -1135,7 +1654,7 @@ document.getElementById("clear-all-btn").addEventListener("click", function() {
   renderMain();
 });
 
-// Initial render — auto-select first topic, first run, and (in doc mode) first doc
+// Initial render — auto-select first topic, first run, and mode-specific defaults
 if (topicIds.length > 0) {
   state.selectedTopic = topicIds[0];
   var firstRuns = reportIndex[topicIds[0]] ? Object.keys(reportIndex[topicIds[0]]).sort() : [];
@@ -1144,6 +1663,10 @@ if (topicIds.length > 0) {
     if (state.mode === "documents" && runDocsIndex[topicIds[0]] && runDocsIndex[topicIds[0]][firstRuns[0]]) {
       var firstDocs = runDocsIndex[topicIds[0]][firstRuns[0]];
       if (firstDocs.length > 0) state.selectedDoc = firstDocs[0];
+    }
+    if (state.mode === "citations") {
+      state.selectedSentenceIdx = 0;
+      state.selectedCitationIdx = 0;
     }
   }
 }
