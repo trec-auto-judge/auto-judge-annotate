@@ -49,28 +49,57 @@ autojudge-annotate \
     --topic 1101 --topic 1102 --topic 1103
 ```
 
-## Annotation workflow
+## Annotation worksflow
 
-1. Enter your username (persists across sessions)
-2. Select a topic from the sidebar, then a run
-3. Read the request (title, problem statement, background) and the report
-4. Highlight relevant passages by selecting text with the mouse
-5. Choose a rating: Perfect, Mostly Good, So-so, Bad, or Not rated
-6. Add optional comments
-7. Navigate between topics/runs freely — all state is preserved
-8. Click **Download JSONL** to export annotations
+Before you begin, enter your username, which persists across sessions and is exported to annotation file.
 
-### Features
+The topbar **Mode** selector switches between three annotation modes:
+
+### Reports mode
+
+Annotate full report text per topic/run.
+
+1. Select a topic from the sidebar, then a run
+2. Read the request (title, problem statement, background) and the report
+3. Highlight relevant passages by selecting text — selections crossing sentence boundaries are automatically split into per-sentence subspans with `sentence_idx`
+4. Click `[DocId]` citation markers to view source documents in a popup (when `--show-documents` is enabled)
+5. Choose a rating and add optional comments
+
+### Documents mode
+
+Annotate individual source documents per topic.
+
+1. Select a topic, then a run, then a document from the sidebar
+2. Read the document text (title + body)
+3. Highlight relevant passages
+4. Choose a rating and add optional comments
+
+### Citations mode
+
+Step through report sentences and annotate the relationship between each sentence and its cited documents with **dual spans** (report spans + document spans).
+
+1. Select a topic, then a run from the sidebar; sentences appear in the sidebar
+2. Use the **sentence stepper** (Prev/Next buttons) or click a sentence in the sidebar
+3. The current sentence is displayed in a yellow box; highlight text to create **report spans**
+4. If the sentence has citations, the cited document appears below; highlight text to create **document spans**
+5. For sentences with multiple citations, use the **citation tabs** to switch between documents
+6. Choose a rating and add optional comments
+7. The sidebar shows checkmarks on fully annotated sentences (all citations rated)
+
+## Common features
 
 - **Auto-save**: every change is saved to localStorage immediately
-- **Span splitting**: selections crossing sentence boundaries are split into per-sentence subspans with `sentence_idx`
-- **Citation popups**: click `[DocId]` markers to view source documents (when `--show-documents` is enabled)
-- **Progress tracking**: sidebar shows checkmarks on annotated runs and completion counts per topic
+- **Progress tracking**: sidebar shows checkmarks on annotated items and completion counts per topic
+- **Ratings**: Perfect, Mostly Good, So-so, Bad, or Not rated
+- **Download**: click **Download JSONL** to export all annotations
 - **Clear all**: small button at the bottom of the sidebar to reset all annotations (with confirmation)
+- **Username**: persists across sessions via localStorage
 
 ## Output format
 
-Each annotation is a JSON line:
+Each annotation is a JSON line. The format varies by mode:
+
+### Report annotation
 
 ```json
 {
@@ -83,9 +112,53 @@ Each annotation is a JSON line:
   "rating": "Mostly Good",
   "comment": "Good coverage but missing key detail",
   "spans": [
-    {"start": 0, "end": 45, "text": "First relevant passage text here", "sentence_idx": 0},
+    {"start": 0, "end": 45, "text": "First relevant passage", "sentence_idx": 0},
     {"start": 46, "end": 120, "text": "Second passage from next sentence", "sentence_idx": 1}
   ],
   "report": { ... }
+}
+```
+
+### Document annotation
+
+```json
+{
+  "dataset": "my-dataset",
+  "request_id": "1101",
+  "docid": "doc-abc-123",
+  "topic_id": "1101",
+  "username": "alice",
+  "rating": "So-so",
+  "comment": "",
+  "spans": [
+    {"start": 10, "end": 85, "text": "Relevant passage from document"}
+  ],
+  "document": { ... }
+}
+```
+
+### Citation annotation
+
+```json
+{
+  "dataset": "my-dataset",
+  "request_id": "1101",
+  "topic_id": "1101",
+  "username": "alice",
+  "rating": "Perfect",
+  "comment": "Sentence accurately reflects source",
+  "spans": [
+    {"start": 0, "end": 50, "text": "Document passage supporting the claim"}
+  ],
+  "report_spans": [
+    {"start": 0, "end": 30, "text": "Sentence text being verified"}
+  ],
+  "citation": {
+    "report": { ... },
+    "sentence_idx": 2,
+    "sentence": {"text": "The full sentence text.", "citations": ["doc-abc-123"]},
+    "docid": "doc-abc-123",
+    "document": { ... }
+  }
 }
 ```
