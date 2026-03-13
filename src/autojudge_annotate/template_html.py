@@ -32,7 +32,7 @@ HTML_BLOCK = r"""
     <div id="doc-list"></div>
     <h3 id="sent-list-header" style="display:none">Sentences</h3>
     <div id="sent-list"></div>
-    <button class="clear-all-btn" id="clear-all-btn">Clear all annotations</button>
+    <button class="clear-all-btn" id="clear-all-btn">Clear my annotations for this dataset</button>
   </div>
   <div class="main-panel" id="main-panel">
     <div class="empty-state">Select a topic and run from the sidebar to begin annotating.</div>

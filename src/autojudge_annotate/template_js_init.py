@@ -52,7 +52,7 @@ function handleDownload() {
 
 // Clear all annotations
 document.getElementById("clear-all-btn").addEventListener("click", function() {
-  if (!confirm("Clear ALL annotations for this dataset? This cannot be undone.")) return;
+  if (!confirm("Clear all your annotations for this dataset? This cannot be undone.")) return;
   state.annotations = {};
   localStorage.removeItem("autojudge_annotate_state_" + DATA.dataset);
   // Also delete from server if online and connected

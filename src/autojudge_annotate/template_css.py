@@ -15,7 +15,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .topbar .sync-controls { display: flex; align-items: center; gap: 8px; }
 .sync-status { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .sync-idle { background: #888; }
-.sync-syncing { background: #f39c12; animation: pulse 1s infinite; }
+.sync-pending { background: #8cbf3f; }
+.sync-syncing { background: #f1c40f; animation: pulse 1s infinite; }
 .sync-success { background: #27ae60; }
 .sync-error { background: #e74c3c; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

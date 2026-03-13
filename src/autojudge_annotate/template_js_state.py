@@ -286,13 +286,13 @@ function isAnnotatedByKey(key) {
   return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
 }
 
-function buildOutputRecords() {
+function buildOutputRecords(includeAll) {
   var records = [];
   var fallbackUsername = usernameInput.value.trim();
   Object.keys(state.annotations).forEach(function(key) {
     var ann = state.annotations[key];
     var username = ann.username || fallbackUsername;
-    if (!isAnnotatedByKey(key)) return;
+    if (!includeAll && !isAnnotatedByKey(key)) return;
 
     // Determine annotation type via key prefix
     if (key.indexOf("c|") === 0) {
