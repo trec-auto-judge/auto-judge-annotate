@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autojudge-annotate"
-version = "0.3.3"
+version = "0.3.4"
 description = "Manual relevance annotation tools for TREC AutoJudge"
 readme = "README.md"
 license = {text = "MIT"}
@@ -38,7 +38,7 @@ test = [
 ]
 
 [project.scripts]
-autojudge-annotate = "autojudge_annotate.generate_html:main"
+autojudge-annotate = "autojudge_annotate.generate_html:cli"
 
 [project.urls]
 Homepage = "https://github.com/trec-autojudge/auto-judge-annotate"
