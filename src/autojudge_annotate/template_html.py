@@ -10,6 +10,14 @@ HTML_BLOCK = r"""
     <option value="documents">Documents</option>
     <option value="citations">Citations</option>
   </select>
+  <span id="sync-controls" class="sync-controls">
+    <label for="sync-mode">Sync:</label>
+    <select id="sync-mode">
+      <option value="offline">Offline</option>
+      <option value="online">Online</option>
+    </select>
+    <span class="sync-status sync-idle" id="sync-status"></span>
+  </span>
   <span class="dataset-label" id="dataset-label"></span>
 </div>
 <div class="username-banner" id="username-banner">Please enter a username above before annotating.</div>

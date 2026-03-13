@@ -12,6 +12,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .username-banner { display: none; background: #e74c3c; color: #fff; text-align: center; padding: 8px; font-weight: 600; font-size: 13px; }
 .username-banner.visible { display: block; }
 .topbar select { padding: 4px 8px; border: 1px solid #555; border-radius: 4px; background: #3d5166; color: #fff; font-size: 13px; }
+.topbar .sync-controls { display: flex; align-items: center; gap: 8px; }
+.sync-status { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.sync-idle { background: #888; }
+.sync-syncing { background: #f39c12; animation: pulse 1s infinite; }
+.sync-success { background: #27ae60; }
+.sync-error { background: #e74c3c; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .topbar .dataset-label { margin-left: auto; font-size: 12px; opacity: 0.7; }
 
 /* Layout */

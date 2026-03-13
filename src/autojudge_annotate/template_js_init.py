@@ -55,6 +55,13 @@ document.getElementById("clear-all-btn").addEventListener("click", function() {
   if (!confirm("Clear ALL annotations for this dataset? This cannot be undone.")) return;
   state.annotations = {};
   localStorage.removeItem("autojudge_annotate_state_" + DATA.dataset);
+  // Also delete from server if online and connected
+  if (syncMode === "online" && typeof syncDeleteAll === "function") {
+    syncDeleteAll().then(function(ok) {
+      if (ok) setSyncStatus("success");
+      else setSyncStatus("error");
+    });
+  }
   renderSidebar();
   renderMain();
 });

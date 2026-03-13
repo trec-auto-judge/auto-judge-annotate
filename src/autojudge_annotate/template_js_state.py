@@ -76,7 +76,6 @@ updateUsernameBanner();
 usernameInput.addEventListener("input", function() {
   localStorage.setItem("autojudge_annotate_username", usernameInput.value);
   updateUsernameBanner();
-  autoSave();
 });
 
 // Load saved annotations from localStorage
@@ -203,6 +202,23 @@ function isCitationSentenceComplete(topicId, runId, sentIdx) {
 // Backwards compat: old annotations without topicId/runId fields
 function getAnnotation(topicId, runId) { return getReportAnnotation(topicId, runId); }
 
+function currentAnnotationKey() {
+  if (state.mode === "documents") {
+    return (state.selectedTopic && state.selectedDoc) ? docAnnotationKey(state.selectedTopic, state.selectedDoc) : null;
+  }
+  if (state.mode === "citations") {
+    if (!state.selectedTopic || !state.selectedRun || state.selectedSentenceIdx === null) return null;
+    var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+    if (!report || !report.sentences || state.selectedSentenceIdx >= report.sentences.length) return null;
+    var sent = report.sentences[state.selectedSentenceIdx];
+    var citations = (sent.citations && sent.citations.length > 0) ? sent.citations : [null];
+    var citIdx = state.selectedCitationIdx || 0;
+    var docId = citations[citIdx] || null;
+    return citationAnnotationKey(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
+  }
+  return (state.selectedTopic && state.selectedRun) ? reportAnnotationKey(state.selectedTopic, state.selectedRun) : null;
+}
+
 function currentAnnotation() {
   if (state.mode === "documents") {
     if (!state.selectedTopic || !state.selectedDoc) return null;
@@ -237,6 +253,9 @@ function isDocAnnotated(topicId, docId) {
 // --- Auto-save: persist annotations + rebuild JSONL ---
 
 function autoSave() {
+  // Stamp current username onto the active annotation
+  var ann = currentAnnotation();
+  if (ann) ann.username = usernameInput.value.trim();
   // Persist annotation state
   localStorage.setItem("autojudge_annotate_state_" + DATA.dataset, JSON.stringify(state.annotations));
   // Update output textarea if visible
@@ -254,6 +273,8 @@ function autoSave() {
   }
   // Update sidebar counts without full re-render (avoid losing focus)
   updateSidebarCounts();
+  // Trigger debounced sync if online mode is active
+  if (typeof syncCurrentAnnotationDebounced === "function") syncCurrentAnnotationDebounced();
 }
 
 function isAnnotatedByKey(key) {
@@ -265,11 +286,12 @@ function isAnnotatedByKey(key) {
   return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
 }
 
-function buildOutputLines() {
-  var lines = [];
-  var username = usernameInput.value.trim();
+function buildOutputRecords() {
+  var records = [];
+  var fallbackUsername = usernameInput.value.trim();
   Object.keys(state.annotations).forEach(function(key) {
     var ann = state.annotations[key];
+    var username = ann.username || fallbackUsername;
     if (!isAnnotatedByKey(key)) return;
 
     // Determine annotation type via key prefix
@@ -307,7 +329,7 @@ function buildOutputLines() {
           document: doc
         }
       };
-      lines.push(JSON.stringify(obj));
+      records.push({key: key, record: obj});
     } else if (ann.docId !== undefined && key.indexOf("d|") === 0) {
       // Document annotation
       var topicId = ann.topicId;
@@ -327,7 +349,7 @@ function buildOutputLines() {
         }),
         document: doc
       };
-      lines.push(JSON.stringify(obj));
+      records.push({key: key, record: obj});
     } else {
       // Report annotation
       var topicId = ann.topicId;
@@ -356,9 +378,13 @@ function buildOutputLines() {
         }),
         report: report
       };
-      lines.push(JSON.stringify(obj));
+      records.push({key: key, record: obj});
     }
   });
-  return lines;
+  return records;
+}
+
+function buildOutputLines() {
+  return buildOutputRecords().map(function(r) { return JSON.stringify(r.record); });
 }
 """

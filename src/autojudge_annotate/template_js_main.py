@@ -49,13 +49,21 @@ function renderAnnotationControls(ann, skipSpans) {
   var annotatedCount = Object.keys(state.annotations).filter(function(k) { return isAnnotatedByKey(k); }).length;
   html += '<div class="output-section"><h3 id="output-header">JSONL Output (' + annotatedCount + ' annotations)</h3>';
   html += '<textarea id="output-area" readonly></textarea>';
-  html += '<button class="download-btn" id="download-btn">Download JSONL</button></div>';
+  html += '<button class="download-btn" id="download-btn">Download JSONL</button>';
+  html += '<button class="download-btn" id="sync-btn" style="margin-left:8px;">Sync to Server</button></div>';
 
   return html;
 }
 
 function attachAnnotationHandlers() {
   document.getElementById("download-btn").addEventListener("click", handleDownload);
+
+  var syncBtn = document.getElementById("sync-btn");
+  if (syncBtn && typeof syncAll === "function") {
+    syncBtn.addEventListener("click", function() { syncAll(); });
+    // Hide if no supabase client
+    if (!supabaseClient) syncBtn.style.display = "none";
+  }
 
   document.querySelectorAll('input[name="rating"]').forEach(function(radio) {
     radio.addEventListener("change", function() {
