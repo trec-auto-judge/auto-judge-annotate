@@ -2,7 +2,9 @@
 
 A tool for human annotation of RAG report quality. Generates a self-contained HTML file that annotators open in a browser — no server required.
 
-Annotators highlight relevant passages, rate report quality, and add comments. All work is auto-saved to the browser's localStorage and can be exported as JSONL.
+Annotators highlight relevant passages, rate report quality, and add comments. All work is auto-saved to the browser's localStorage and can be exported as JSONL. 
+
+Optional Supabase integration enables real-time cloud sync across annotators.
 
 ## Installation
 
@@ -15,7 +17,7 @@ Requires `autojudge-base` and `click`.
 ## Usage
 
 ```bash
-autojudge-annotate \
+autojudge-annotate generate \
     --rag-responses path/to/runs/ \
     --rag-topics path/to/topics.jsonl \
     --output annotator.html \
@@ -35,13 +37,15 @@ Then open `annotator.html` in a browser.
 | `--dataset` | Freetext label included in annotation output |
 | `--show-documents` | Enable citation document popups (increases file size) |
 | `--topic ID` | Filter to specific topics (repeatable) |
+| `--supabase-url` | Supabase project URL for cloud sync (optional) |
+| `--supabase-anon-key` | Supabase anon key for cloud sync (optional) |
 
 ### Filtering topics
 
 For large datasets, pass only the topics you need:
 
 ```bash
-autojudge-annotate \
+autojudge-annotate generate \
     --rag-responses runs/ \
     --rag-topics topics.jsonl \
     --output annotator.html \
@@ -49,9 +53,65 @@ autojudge-annotate \
     --topic 1101 --topic 1102 --topic 1103
 ```
 
-## Annotation worksflow
+## Supabase setup (optional)
 
-Before you begin, enter your username, which persists across sessions and is exported to annotation file.
+Supabase enables cloud sync so multiple annotators can work on the same dataset and annotations are persisted server-side.
+
+### 1. Create the database table
+
+Run `autojudge-annotate init-db` to print the SQL, then paste it into the Supabase dashboard (SQL Editor > New query > Run):
+
+```bash
+autojudge-annotate init-db
+```
+
+Verify by checking Table Editor > `annotations_current` in the Supabase dashboard.
+
+### 2. Generate HTML with Supabase credentials
+
+Find your project URL and anon key in the Supabase dashboard under Settings > API.
+
+```bash
+autojudge-annotate generate \
+    --rag-responses runs/ \
+    --rag-topics topics.jsonl \
+    --output annotator.html \
+    --dataset my-dataset \
+    --supabase-url https://yourproject.supabase.co \
+    --supabase-anon-key your-anon-key
+```
+
+### 3. Sync modes
+
+The annotation interface has a sync mode toggle in the top bar:
+
+- **Online**: annotations are automatically uploaded to Supabase after each edit (5s throttle). A status indicator shows sync state: grey (idle), yellowish-green (pending), yellow (uploading), green (synced), red (error).
+- **Offline**: annotations are saved to localStorage only. Use the "Sync to Server" button to upload manually when ready.
+
+Switching from offline to online immediately uploads all annotations. On sync errors, a dialog offers to switch to offline mode.
+
+### 4. Export annotations
+
+Download all annotations from Supabase as JSONL:
+
+```bash
+# All datasets
+autojudge-annotate export-db \
+    --supabase-url https://yourproject.supabase.co \
+    --supabase-anon-key your-anon-key \
+    -o annotations.jsonl
+
+# Single dataset
+autojudge-annotate export-db \
+    --supabase-url https://yourproject.supabase.co \
+    --supabase-anon-key your-anon-key \
+    --dataset my-dataset \
+    -o annotations.jsonl
+```
+
+## Annotation workflow
+
+Before you begin, enter your username, which persists across sessions and is stored per annotation.
 
 The topbar **Mode** selector switches between three annotation modes:
 
@@ -92,8 +152,8 @@ Step through report sentences and annotate the relationship between each sentenc
 - **Progress tracking**: sidebar shows checkmarks on annotated items and completion counts per topic
 - **Ratings**: Perfect, Mostly Good, So-so, Bad, or Not rated
 - **Download**: click **Download JSONL** to export all annotations
-- **Clear all**: small button at the bottom of the sidebar to reset all annotations (with confirmation)
-- **Username**: persists across sessions via localStorage
+- **Clear**: button at the bottom of the sidebar to reset your annotations for this dataset (with confirmation; also deletes from server if online)
+- **Username**: stored per annotation at edit time, persists across sessions
 
 ## Output format
 
