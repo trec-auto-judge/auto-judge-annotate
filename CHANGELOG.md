@@ -18,6 +18,7 @@
 - Remove `psycopg2` dependency (all Supabase access via REST API)
 - "Clear all" button renamed to clarify scope (per-user, per-dataset)
 
+
 ## 0.3.5 yanked
 
 ## 0.3.4 yanked

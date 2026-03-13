@@ -172,6 +172,7 @@ def generate(
     click.echo(f"Written annotation interface to {output}")
 
 
+
 _INIT_DB_SQL = """\
 CREATE TABLE IF NOT EXISTS annotations_current (
     dataset TEXT NOT NULL,
