@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.7
+
+- Span selection: trim leading/trailing whitespace from saved offsets so the
+  highlight ends on a real character. Fixes the inline-block remove-x being
+  pushed onto a new visual line (and unreachable) when a selection ends on a
+  newline.
+
 ## 0.3.6
 
 - Supabase sync: simplified to throttled `syncAll` approach (every edit starts a 5s
