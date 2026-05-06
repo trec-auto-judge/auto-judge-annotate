@@ -1,9 +1,14 @@
 """JS span/highlight logic: buildReportText, buildPlainText, buildSentenceBoundaries,
-splitIntoSentenceSpans, collectTextNodes, applyHighlights, wrapRange,
-handleSelection, handleDocSelection, computeOffset, renderSpans,
-refreshReportHighlights, refreshDocHighlights."""
+splitIntoSentenceSpans, handleSelection, handleDocSelection, renderSpans,
+refreshReportHighlights, refreshDocHighlights.
 
-JS_SPANS = r"""
+Generic DOM utilities (collectTextNodes, computeOffset, applyHighlights, wrapRange)
+are imported from template_js_spans_core.
+"""
+
+from .template_js_spans_core import JS_SPANS_CORE
+
+JS_SPANS = JS_SPANS_CORE + r"""
 // --- Report text rendering ---
 
 function buildReportText(container, report) {
@@ -76,77 +81,9 @@ function splitIntoSentenceSpans(start, end, report) {
   return subspans;
 }
 
-// --- Highlight / span logic ---
+// --- autojudge-annotate specific constants ---
 
-function collectTextNodes(container) {
-  var textNodes = [];
-  var nodeStarts = [];
-  var pos = 0;
-  function walk(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      textNodes.push(node);
-      nodeStarts.push(pos);
-      pos += node.textContent.length;
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.classList && node.classList.contains("citation-marker")) return;
-      if (node.classList && node.classList.contains("remove-span")) return;
-      for (var i = 0; i < node.childNodes.length; i++) {
-        walk(node.childNodes[i]);
-      }
-    }
-  }
-  walk(container);
-  return { textNodes: textNodes, nodeStarts: nodeStarts };
-}
-
-function applyHighlights(container, spans, onRemove) {
-  if (!spans || spans.length === 0) return;
-
-  // Apply spans in reverse order to avoid invalidating offsets
-  var sorted = spans.slice().sort(function(a, b) { return b.start - a.start; });
-  sorted.forEach(function(sp) {
-    var spanIndex = spans.indexOf(sp);
-    var info = collectTextNodes(container);
-    wrapRange(info.textNodes, info.nodeStarts, sp, spanIndex, onRemove);
-  });
-}
-
-function wrapRange(textNodes, nodeStarts, span, spanIndex, onRemove) {
-  var isFirst = true;
-  for (var i = 0; i < textNodes.length; i++) {
-    var nodeStart = nodeStarts[i];
-    var nodeEnd = nodeStart + textNodes[i].textContent.length;
-
-    if (span.start >= nodeEnd) continue;
-    if (span.end <= nodeStart) break;
-
-    var localStart = Math.max(0, span.start - nodeStart);
-    var localEnd = Math.min(textNodes[i].textContent.length, span.end - nodeStart);
-
-    var range = document.createRange();
-    range.setStart(textNodes[i], localStart);
-    range.setEnd(textNodes[i], localEnd);
-
-    var mark = document.createElement("mark");
-    range.surroundContents(mark);
-
-    // Only show remove button on first fragment of the span
-    if (isFirst) {
-      var removeBtn = document.createElement("span");
-      removeBtn.className = "remove-span";
-      removeBtn.textContent = "x";
-      removeBtn.setAttribute("data-span-index", spanIndex);
-      removeBtn.addEventListener("click", function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        var idx = parseInt(this.getAttribute("data-span-index"));
-        onRemove(idx);
-      });
-      mark.appendChild(removeBtn);
-      isFirst = false;
-    }
-  }
-}
+var SKIP_CLASSES = ["citation-marker", "remove-span"];
 
 // --- Refresh helpers (rebuild text + highlights with explicit onRemove) ---
 
@@ -160,7 +97,7 @@ function refreshReportHighlights() {
     autoSave();
     refreshReportHighlights();
     renderSpans();
-  });
+  }, SKIP_CLASSES);
   reportTextEl.addEventListener("mouseup", handleSelection);
 }
 
@@ -175,7 +112,7 @@ function refreshDocHighlights() {
     autoSave();
     refreshDocHighlights();
     renderSpans();
-  });
+  }, SKIP_CLASSES);
   reportTextEl.addEventListener("mouseup", handleDocSelection);
 }
 
@@ -194,7 +131,7 @@ function handleSelection() {
   var selectedText = sel.toString().trim();
   if (!selectedText) return;
 
-  var offset = computeOffset(reportTextEl, range);
+  var offset = computeOffset(reportTextEl, range, SKIP_CLASSES);
   if (offset === null) return;
 
   var ann = currentAnnotation();
@@ -236,7 +173,7 @@ function handleDocSelection() {
   var selectedText = sel.toString().trim();
   if (!selectedText) return;
 
-  var offset = computeOffset(reportTextEl, range);
+  var offset = computeOffset(reportTextEl, range, SKIP_CLASSES);
   if (offset === null) return;
 
   var ann = currentAnnotation();
@@ -266,49 +203,6 @@ function handleDocSelection() {
   // Re-render highlights
   refreshDocHighlights();
   renderSpans();
-}
-
-function computeOffset(container, range) {
-  var startOff = 0;
-  var endOff = 0;
-  var foundStart = false;
-  var foundEnd = false;
-  var charPos = 0;
-
-  function walk(node) {
-    if (foundEnd) return;
-    if (node.nodeType === Node.TEXT_NODE) {
-      var len = node.textContent.length;
-      if (!foundStart && node === range.startContainer) {
-        startOff = charPos + range.startOffset;
-        foundStart = true;
-      }
-      if (!foundEnd && node === range.endContainer) {
-        endOff = charPos + range.endOffset;
-        foundEnd = true;
-      }
-      charPos += len;
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      if (node.classList && node.classList.contains("citation-marker")) {
-        if (!foundStart && node.contains(range.startContainer)) {
-          startOff = charPos;
-          foundStart = true;
-        }
-        if (!foundEnd && node.contains(range.endContainer)) {
-          endOff = charPos;
-          foundEnd = true;
-        }
-        return;
-      }
-      if (node.classList && node.classList.contains("remove-span")) return;
-      for (var i = 0; i < node.childNodes.length; i++) {
-        walk(node.childNodes[i]);
-      }
-    }
-  }
-  walk(container);
-  if (!foundStart || !foundEnd || startOff >= endOff) return null;
-  return { start: startOff, end: endOff };
 }
 
 function renderSpans() {
