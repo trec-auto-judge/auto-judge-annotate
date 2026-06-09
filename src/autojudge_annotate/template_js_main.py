@@ -347,6 +347,10 @@ function renderMainReportMode() {
 
   var ann = getReportAnnotation(state.selectedTopic, state.selectedRun);
 
+  // Add nugget panel if nuggets are available
+  var currentDocIds = getReportDocIds(report);
+  html += renderNuggetPanel(state.selectedTopic, currentDocIds);
+
   html += '<div class="report-section">';
   html += "<h2>Report: " + escapeHtml(report.run_id) + " by " + escapeHtml(report.team_id) + "</h2>";
   html += '<div class="report-text" id="report-text"></div>';
@@ -385,6 +389,9 @@ function renderMainDocMode() {
   }
 
   var ann = getDocAnnotation(state.selectedTopic, state.selectedDoc);
+
+  // Add nugget panel for the selected document
+  html += renderNuggetPanel(state.selectedTopic, [state.selectedDoc]);
 
   html += '<div class="report-section">';
   html += "<h2>Document: " + escapeHtml(state.selectedDoc) + "</h2>";

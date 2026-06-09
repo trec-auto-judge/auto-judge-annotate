@@ -127,4 +127,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .sent-item .cite-count { font-size: 10px; opacity: 0.7; }
 .report-span-chip { display: inline-block; background: #ffeaa7; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
 .document-span-chip { display: inline-block; background: #b8e6ff; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
+
+/* Nugget panel */
+.nugget-panel { margin: 16px 0; padding: 12px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; }
+.nugget-panel-header { font-size: 14px; color: #495057; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.nugget-panel-header::before { content: ""; display: inline-block; width: 0; height: 0; border-left: 5px solid #495057; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.2s; }
+.nugget-panel.collapsed .nugget-panel-header::before { transform: rotate(90deg); }
+.nugget-panel.collapsed .nugget-list, .nugget-panel.collapsed .nugget-claims-section { display: none; }
+
+.nugget-list { display: flex; flex-direction: column; gap: 6px; }
+.nugget-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; background: #fff; border-radius: 4px; border: 1px solid #dee2e6; font-size: 13px; line-height: 1.4; }
+.nugget-item.nugget-satisfied { border-left: 3px solid #28a745; background: #f8fff8; }
+.nugget-item.nugget-not-satisfied { border-left: 3px solid #dc3545; background: #fff8f8; }
+
+.nugget-verdict { font-size: 14px; flex-shrink: 0; width: 18px; text-align: center; }
+.nugget-satisfied .nugget-verdict { color: #28a745; }
+.nugget-not-satisfied .nugget-verdict { color: #dc3545; }
+
+.nugget-text { flex: 1; }
+.nugget-docs { font-size: 11px; color: #6c757d; flex-shrink: 0; cursor: help; }
+
+.nugget-claims-section { margin-top: 12px; }
+.nugget-claims-section h4 { font-size: 12px; color: #6c757d; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 """

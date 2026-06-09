@@ -2,11 +2,17 @@
 
 import json
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional
 
 import click
 
-
+from autojudge_base.nugget_data import (
+    NuggetBank,
+    NuggetBanks,
+    NuggetClaim,
+    NuggetQuestion,
+    load_nugget_banks_from_file,
+)
 from autojudge_base.report import Report, load_report
 from autojudge_base.request import Request, load_requests_from_file
 
@@ -56,6 +62,62 @@ def _serialize_requests(requests: List[Request]) -> List[dict]:
         }
         for r in requests
     ]
+
+
+def _serialize_nugget_banks(nugget_banks: Optional[NuggetBanks]) -> Dict[str, dict]:
+    """Serialize nugget banks to JSON-safe dict keyed by topic_id.
+
+    Returns:
+        Dict mapping topic_id -> {
+            "nuggets": [{nugget_id, text, importance, quality, doc_ids}],
+            "claims": [{claim_id, text, importance, quality, doc_ids}]
+        }
+
+    The doc_ids come from NuggetQuestion.references, indicating which
+    documents satisfy the nugget (nugget-docs format).
+    """
+    if nugget_banks is None:
+        return {}
+
+    result: Dict[str, dict] = {}
+    for topic_id, bank in nugget_banks.banks.items():
+        nuggets = []
+        claims = []
+
+        # Serialize nugget questions
+        if bank.nugget_bank:
+            for question in bank.nugget_bank.values():
+                doc_ids = []
+                if question.references:
+                    doc_ids = [ref.doc_id for ref in question.references]
+                nuggets.append({
+                    "nugget_id": question.question_id,
+                    "text": question.question,
+                    "importance": question.importance,
+                    "quality": question.quality,
+                    "doc_ids": doc_ids,
+                })
+
+        # Serialize nugget claims
+        if bank.claim_bank:
+            for claim in bank.claim_bank.values():
+                doc_ids = []
+                if claim.references:
+                    doc_ids = [ref.doc_id for ref in claim.references]
+                claims.append({
+                    "claim_id": claim.claim_id,
+                    "text": claim.claim,
+                    "importance": claim.importance,
+                    "quality": claim.quality,
+                    "doc_ids": doc_ids,
+                })
+
+        result[topic_id] = {
+            "nuggets": nuggets,
+            "claims": claims,
+        }
+
+    return result
 
 
 @click.group()
@@ -113,6 +175,12 @@ def cli():
     default=None,
     help="Supabase anon key for server sync",
 )
+@click.option(
+    "--nugget-banks",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Nugget banks file (JSONL) with nugget questions and doc references",
+)
 def generate(
     rag_responses: Path,
     rag_topics: Path,
@@ -122,6 +190,7 @@ def generate(
     topic: tuple,
     supabase_url: str,
     supabase_anon_key: str,
+    nugget_banks: Optional[Path],
 ) -> None:
     """Generate an HTML annotation interface from reports and topics."""
     # Load requests
@@ -153,10 +222,33 @@ def generate(
         all_reports = [r for r in all_reports if r.metadata.topic_id in topic_set]
     click.echo(f"Total: {len(all_reports)} reports")
 
+    # Validation: require at least one topic and one report
+    if len(requests) == 0:
+        raise click.ClickException("No topics loaded. Check --rag-topics path.")
+    if len(all_reports) == 0:
+        raise click.ClickException("No reports loaded. Check --rag-responses path.")
+
+    # Count documents for warning
+    total_docs = sum(
+        len(r.documents) if r.documents else 0 for r in all_reports
+    )
+    if total_docs == 0:
+        click.echo("Warning: No cited documents found in any report.", err=True)
+
+    # Load nugget banks if provided
+    loaded_nugget_banks: Optional[NuggetBanks] = None
+    if nugget_banks:
+        loaded_nugget_banks = load_nugget_banks_from_file(nugget_banks)
+        total_nuggets = sum(
+            len(b.nuggets_as_list()) for b in loaded_nugget_banks.banks.values()
+        )
+        click.echo(f"Loaded {total_nuggets} nuggets across {len(loaded_nugget_banks.banks)} topics from {nugget_banks}")
+
     # Build data payload
     data = {
         "requests": _serialize_requests(requests),
         "reports": _serialize_reports(all_reports),
+        "nugget_banks": _serialize_nugget_banks(loaded_nugget_banks),
         "show_documents": show_documents,
         "dataset": dataset,
         "supabase_url": supabase_url or "",
