@@ -61,21 +61,25 @@ function attachAnnotationHandlers() {
   var syncBtn = document.getElementById("sync-btn");
   if (syncBtn && typeof syncAll === "function") {
     syncBtn.addEventListener("click", function() { syncAll(); });
-    // Hide if no supabase client
-    if (!supabaseClient) syncBtn.style.display = "none";
+    // Hide if no supabase client (use typeof to avoid ReferenceError when not defined)
+    if (typeof supabaseClient === "undefined" || !supabaseClient) syncBtn.style.display = "none";
   }
 
+  // Call currentAnnotation() fresh on each event (matches how handleSelection() works for spans)
   document.querySelectorAll('input[name="rating"]').forEach(function(radio) {
     radio.addEventListener("change", function() {
-      var ann = currentAnnotation();
-      if (ann) { ann.rating = this.value; autoSave(); }
+      var current = currentAnnotation();
+      if (current) { current.rating = this.value; autoSave(); }
     });
   });
 
-  document.getElementById("comment-input").addEventListener("input", function() {
-    var ann = currentAnnotation();
-    if (ann) { ann.comment = this.value.trim(); autoSave(); }
-  });
+  var commentInput = document.getElementById("comment-input");
+  if (commentInput) {
+    commentInput.addEventListener("input", function() {
+      var current = currentAnnotation();
+      if (current) { current.comment = this.value.trim(); autoSave(); }
+    });
+  }
 
   var outputArea = document.getElementById("output-area");
   outputArea.value = buildOutputLines().join("\n");

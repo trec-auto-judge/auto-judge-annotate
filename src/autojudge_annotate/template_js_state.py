@@ -227,6 +227,7 @@ function currentAnnotationKey() {
     var docId = citations[citIdx] || null;
     return citationAnnotationKey(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
   }
+  // Both "reports" and "nuggets" modes use report annotations
   return (state.selectedTopic && state.selectedRun) ? reportAnnotationKey(state.selectedTopic, state.selectedRun) : null;
 }
 
@@ -245,6 +246,7 @@ function currentAnnotation() {
     var docId = citations[citIdx] || null;
     return getCitationAnnotation(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
   }
+  // Both "reports" and "nuggets" modes use report annotations
   if (!state.selectedTopic || !state.selectedRun) return null;
   return getReportAnnotation(state.selectedTopic, state.selectedRun);
 }
