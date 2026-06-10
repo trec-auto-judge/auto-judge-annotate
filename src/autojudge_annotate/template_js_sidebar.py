@@ -315,7 +315,17 @@ function renderSidebar() {
         el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
         var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
         var checkContent = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
-        el.innerHTML = label + '<span class="checkmark" id="run-check-' + CSS.escape(rid) + '">' + checkContent + '</span>';
+
+        // Add nugget coverage if nugget banks are available
+        var nuggetBadge = "";
+        if (typeof countNuggetCoverage === "function") {
+          var cov = countNuggetCoverage(state.selectedTopic, rid);
+          if (cov.total > 0) {
+            nuggetBadge = '<span class="nugget-coverage" id="nugget-cov-' + CSS.escape(rid) + '">' + cov.satisfied + '/' + cov.total + '</span>';
+          }
+        }
+
+        el.innerHTML = label + nuggetBadge + '<span class="checkmark" id="run-check-' + CSS.escape(rid) + '">' + checkContent + '</span>';
         el.addEventListener("click", function() {
           state.selectedRun = rid;
           renderSidebar();

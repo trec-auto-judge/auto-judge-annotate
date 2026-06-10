@@ -120,6 +120,153 @@ def _serialize_nugget_banks(nugget_banks: Optional[NuggetBanks]) -> Dict[str, di
     return result
 
 
+def _load_nugget_grades(path: Path) -> List[dict]:
+    """Load nugget grades from JSONL file.
+
+    Each line: {run_id, query_id, nugget_id, question, grade, reasoning, confidence, ...}
+    """
+    grades = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                grades.append(json.loads(line))
+    return grades
+
+
+def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, dict]]]:
+    """Serialize nugget grades to nested dict.
+
+    Returns:
+        Dict[query_id][run_id][nugget_id] -> {grade, reasoning, confidence}
+    """
+    result: Dict[str, Dict[str, Dict[str, dict]]] = {}
+    for g in grades:
+        query_id = g.get("query_id", "")
+        run_id = g.get("run_id", "")
+        nugget_id = g.get("nugget_id", "")
+
+        if query_id not in result:
+            result[query_id] = {}
+        if run_id not in result[query_id]:
+            result[query_id][run_id] = {}
+
+        result[query_id][run_id][nugget_id] = {
+            "grade": g.get("grade", 0),
+            "reasoning": g.get("reasoning", ""),
+            "confidence": g.get("confidence", 0.0),
+        }
+
+    return result
+
+
+def _extract_nuggets_from_grades(grades: List[dict]) -> Dict[str, Dict[str, dict]]:
+    """Extract unique nuggets from grades file to build a nugget bank.
+
+    Returns:
+        Dict mapping query_id -> nugget_id -> {nugget_id, text, ..., has_grades: True}
+    """
+    result: Dict[str, Dict[str, dict]] = {}
+
+    for g in grades:
+        query_id = g.get("query_id", "")
+        nugget_id = g.get("nugget_id", "")
+        question = g.get("question", "")
+
+        if not query_id or not nugget_id:
+            continue
+
+        if query_id not in result:
+            result[query_id] = {}
+
+        # Only store if we haven't seen this nugget yet
+        if nugget_id not in result[query_id]:
+            result[query_id][nugget_id] = {
+                "nugget_id": nugget_id,
+                "text": question,
+                "importance": None,
+                "quality": None,
+                "doc_ids": [],
+                "has_grades": True,
+                "has_doc_info": False,
+            }
+
+    return result
+
+
+def _serialize_nugget_banks_as_dict(nugget_banks: Optional[NuggetBanks]) -> Dict[str, Dict[str, dict]]:
+    """Serialize nugget banks to nested dict keyed by topic_id -> nugget_id.
+
+    Returns:
+        Dict mapping topic_id -> nugget_id -> {nugget_id, text, ..., has_doc_info: bool}
+    """
+    if nugget_banks is None:
+        return {}
+
+    result: Dict[str, Dict[str, dict]] = {}
+    for topic_id, bank in nugget_banks.banks.items():
+        result[topic_id] = {}
+
+        if bank.nugget_bank:
+            for question in bank.nugget_bank.values():
+                doc_ids = []
+                if question.references:
+                    doc_ids = [ref.doc_id for ref in question.references]
+                # has_doc_info is True if we have doc_ids (nugget-docs format)
+                has_doc_info = len(doc_ids) > 0
+                result[topic_id][question.question_id] = {
+                    "nugget_id": question.question_id,
+                    "text": question.question,
+                    "importance": question.importance,
+                    "quality": question.quality,
+                    "doc_ids": doc_ids,
+                    "has_grades": False,
+                    "has_doc_info": has_doc_info,
+                }
+
+        # Also add claims with claim_id as the key
+        if bank.claim_bank:
+            for claim in bank.claim_bank.values():
+                doc_ids = []
+                if claim.references:
+                    doc_ids = [ref.doc_id for ref in claim.references]
+                has_doc_info = len(doc_ids) > 0
+                result[topic_id][claim.claim_id] = {
+                    "nugget_id": claim.claim_id,  # Use nugget_id field for consistency
+                    "text": claim.claim,
+                    "importance": claim.importance,
+                    "quality": claim.quality,
+                    "doc_ids": doc_ids,
+                    "has_grades": False,
+                    "has_doc_info": has_doc_info,
+                    "is_claim": True,
+                }
+
+    return result
+
+
+def _convert_nugget_dict_to_list_format(nugget_dict: Dict[str, Dict[str, dict]]) -> Dict[str, dict]:
+    """Convert dict-keyed nuggets back to list format for JS consumption.
+
+    Returns:
+        Dict mapping topic_id -> {"nuggets": [...], "claims": [...]}
+    """
+    result: Dict[str, dict] = {}
+    for topic_id, nuggets in nugget_dict.items():
+        nugget_list = []
+        claim_list = []
+        for nugget in nuggets.values():
+            if nugget.get("is_claim"):
+                # Remove the is_claim flag and rename nugget_id to claim_id
+                claim = {k: v for k, v in nugget.items() if k != "is_claim"}
+                claim["claim_id"] = claim.pop("nugget_id")
+                claim_list.append(claim)
+            else:
+                nugget_list.append(nugget)
+        result[topic_id] = {"nuggets": nugget_list, "claims": claim_list}
+    return result
+
+
 @click.group()
 def cli():
     """AutoJudge annotation tools."""
@@ -181,6 +328,12 @@ def cli():
     default=None,
     help="Nugget banks file (JSONL) with nugget questions and doc references",
 )
+@click.option(
+    "--nugget-grades",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Nugget grades file (JSONL) with per-report nugget grading results",
+)
 def generate(
     rag_responses: Path,
     rag_topics: Path,
@@ -191,6 +344,7 @@ def generate(
     supabase_url: str,
     supabase_anon_key: str,
     nugget_banks: Optional[Path],
+    nugget_grades: Optional[Path],
 ) -> None:
     """Generate an HTML annotation interface from reports and topics."""
     # Load requests
@@ -244,11 +398,38 @@ def generate(
         )
         click.echo(f"Loaded {total_nuggets} nuggets across {len(loaded_nugget_banks.banks)} topics from {nugget_banks}")
 
+    # Load nugget grades if provided
+    serialized_grades: Dict[str, Dict[str, Dict[str, dict]]] = {}
+    nuggets_from_grades: Dict[str, Dict[str, dict]] = {}
+    if nugget_grades:
+        raw_grades = _load_nugget_grades(nugget_grades)
+        serialized_grades = _serialize_nugget_grades(raw_grades)
+        nuggets_from_grades = _extract_nuggets_from_grades(raw_grades)
+        total_grades = len(raw_grades)
+        num_runs = sum(len(runs) for runs in serialized_grades.values())
+        click.echo(f"Loaded {total_grades} nugget grades across {num_runs} run/topic combinations from {nugget_grades}")
+
+    # Merge nugget banks: union of nuggets from both sources (dict-based merge)
+    # Start with grades-extracted nuggets, then update with bank nuggets (bank takes precedence)
+    merged_nuggets: Dict[str, Dict[str, dict]] = {}
+    for topic_id, nuggets in nuggets_from_grades.items():
+        merged_nuggets.setdefault(topic_id, {}).update(nuggets)
+    bank_nuggets = _serialize_nugget_banks_as_dict(loaded_nugget_banks)
+    for topic_id, nuggets in bank_nuggets.items():
+        merged_nuggets.setdefault(topic_id, {}).update(nuggets)
+
+    # Convert to list format for JS
+    final_nugget_banks = _convert_nugget_dict_to_list_format(merged_nuggets)
+    total_final = sum(len(b["nuggets"]) + len(b["claims"]) for b in final_nugget_banks.values())
+    if total_final > 0:
+        click.echo(f"Final nugget bank: {total_final} nuggets across {len(final_nugget_banks)} topics")
+
     # Build data payload
     data = {
         "requests": _serialize_requests(requests),
         "reports": _serialize_reports(all_reports),
-        "nugget_banks": _serialize_nugget_banks(loaded_nugget_banks),
+        "nugget_banks": final_nugget_banks,
+        "nugget_grades": serialized_grades,
         "show_documents": show_documents,
         "dataset": dataset,
         "supabase_url": supabase_url or "",
