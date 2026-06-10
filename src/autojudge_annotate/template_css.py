@@ -154,4 +154,64 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 .nugget-claims-section { margin-top: 12px; }
 .nugget-claims-section h4 { font-size: 12px; color: #6c757d; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Nuggets mode - criteria panel */
+.criteria-panel { margin-bottom: 24px; padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+.criteria-panel h3 { font-size: 14px; margin-bottom: 12px; color: #2c3e50; }
+
+.category-section { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+.category-section:last-child { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+
+.category-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.category-name { font-weight: 600; color: #2c3e50; min-width: 100px; }
+.category-weight { width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; text-align: center; }
+.category-weight:focus { outline: none; border-color: #3498db; }
+
+.criteria-nugget-list { margin-left: 20px; }
+.criteria-nugget-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.criteria-nugget-item input[type="checkbox"] { margin-top: 3px; }
+.criteria-nugget-item label { font-size: 13px; line-height: 1.4; color: #555; cursor: pointer; }
+.criteria-nugget-item label:hover { color: #2c3e50; }
+
+/* Nuggets mode - document list */
+.doc-list-section { margin-bottom: 24px; }
+.doc-list-section h3 { font-size: 14px; margin-bottom: 12px; color: #2c3e50; }
+
+.doc-list { max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; }
+.doc-item { padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; align-items: center; gap: 12px; }
+.doc-item:last-child { border-bottom: none; }
+.doc-item:hover { background: #f5f6fa; }
+.doc-item.active { background: #e8f4fc; border-left: 3px solid #3498db; }
+
+.doc-rank { font-weight: 600; color: #888; min-width: 24px; }
+.doc-id { flex: 1; font-weight: 500; color: #2c3e50; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-score { font-weight: 600; min-width: 50px; text-align: right; }
+.doc-summary { font-size: 11px; color: #888; min-width: 120px; text-align: right; }
+
+.score-high { color: #27ae60; }
+.score-medium { color: #f39c12; }
+.score-low { color: #e74c3c; }
+
+/* Nuggets mode - document viewer */
+.doc-viewer-section { margin-bottom: 24px; }
+.doc-viewer-section h3 { font-size: 14px; margin-bottom: 12px; color: #2c3e50; }
+
+.doc-viewer { padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
+
+.doc-verdicts { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #eee; }
+.doc-verdicts h4 { font-size: 13px; color: #888; margin-bottom: 8px; text-transform: uppercase; }
+
+.verdict-category { margin-bottom: 12px; }
+.verdict-category-name { font-weight: 600; font-size: 12px; color: #555; margin-bottom: 4px; }
+.verdict-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; padding-left: 12px; }
+.verdict-icon { font-size: 12px; min-width: 16px; }
+.verdict-text { font-size: 12px; color: #666; line-height: 1.4; flex: 1; }
+.verdict-reasoning { font-size: 11px; color: #999; cursor: help; }
+
+.verdict-satisfied { color: #27ae60; }
+.verdict-partial { color: #f39c12; }
+.verdict-not-satisfied { color: #e74c3c; }
+.verdict-unknown { color: #6c757d; }
+
+.doc-text { line-height: 1.7; white-space: pre-wrap; font-size: 13px; color: #333; max-height: 400px; overflow-y: auto; padding: 12px; background: #fafafa; border-radius: 4px; }
 """

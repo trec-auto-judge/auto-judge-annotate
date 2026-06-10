@@ -9,6 +9,7 @@ HTML_BLOCK = r"""
     <option value="reports">Reports</option>
     <option value="documents">Documents</option>
     <option value="citations">Citations</option>
+    <option value="nuggets">Nuggets</option>
   </select>
   <span id="sync-controls" class="sync-controls">
     <label for="sync-mode">Sync:</label>

@@ -193,6 +193,38 @@ function renderSidebarCitationsMode() {
   }
 }
 
+function renderSidebarNuggetsMode() {
+  runListHeader.textContent = "Reports";
+  docListHeader.style.display = "none";
+  sentListHeader.style.display = "none";
+
+  // Topics: show nugget count
+  topicIds.forEach(function(tid) {
+    var bank = getNuggetsForTopic(tid);
+    var nuggetCount = (bank.nuggets || []).length;
+
+    var el = document.createElement("div");
+    el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
+    el.innerHTML = escapeHtml(tid) + '<span class="progress">(' + nuggetCount + ' nuggets)</span>';
+    el.addEventListener("click", function() {
+      state.selectedTopic = tid;
+      state.selectedRun = null; // Clear run selection
+      renderSidebar();
+      renderMain();
+    });
+    topicList.appendChild(el);
+  });
+
+  // In nuggets mode, runs are shown in the main panel as a ranked list
+  // Show a message in the run list area
+  var msgEl = document.createElement("div");
+  msgEl.className = "empty-state";
+  msgEl.style.padding = "12px";
+  msgEl.style.fontSize = "12px";
+  msgEl.textContent = "Reports are ranked in the main panel.";
+  runList.appendChild(msgEl);
+}
+
 function renderSidebar() {
   topicList.innerHTML = "";
   runList.innerHTML = "";
@@ -201,6 +233,11 @@ function renderSidebar() {
 
   if (state.mode === "citations") {
     renderSidebarCitationsMode();
+    return;
+  }
+
+  if (state.mode === "nuggets") {
+    renderSidebarNuggetsMode();
     return;
   }
 

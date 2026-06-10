@@ -8,6 +8,7 @@ from .template_html import HTML_BLOCK
 from .template_js_state import JS_STATE
 from .template_js_sidebar import JS_SIDEBAR
 from .template_js_nuggets import JS_NUGGETS
+from .template_js_nuggets_mode import JS_NUGGETS_MODE
 from .template_js_main import JS_MAIN
 from .template_js_spans import JS_SPANS
 from .template_js_init import JS_INIT
@@ -27,6 +28,7 @@ HTML_TEMPLATE = (
     + JS_STATE + '\n'
     + JS_SIDEBAR + '\n'
     + JS_NUGGETS + '\n'
+    + JS_NUGGETS_MODE + '\n'
     + JS_MAIN + '\n'
     + JS_SPANS + '\n'
     + JS_SYNC + '\n'

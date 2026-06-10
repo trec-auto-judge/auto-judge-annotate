@@ -324,6 +324,8 @@ function renderMain() {
     renderMainCitationsMode();
   } else if (state.mode === "documents") {
     renderMainDocMode();
+  } else if (state.mode === "nuggets") {
+    renderMainNuggetsMode();
   } else {
     renderMainReportMode();
   }

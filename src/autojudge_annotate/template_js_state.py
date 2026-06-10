@@ -13,8 +13,11 @@ var state = {
   selectedDoc: null,
   selectedSentenceIdx: null,
   selectedCitationIdx: null,
-  mode: "reports",   // "reports", "documents", or "citations"
-  annotations: {}   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
+  mode: "reports",   // "reports", "documents", "citations", or "nuggets"
+  annotations: {},   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
+  // Nuggets mode state
+  enabledNuggets: {},  // nugget_id -> boolean (default true)
+  nuggetWeights: { must: 1.0 }  // category -> weight
 };
 
 // DOM refs
@@ -34,6 +37,8 @@ var docList = document.getElementById("doc-list");
 var runListHeader = document.getElementById("run-list-header");
 var sentListHeader = document.getElementById("sent-list-header");
 var sentList = document.getElementById("sent-list");
+var nuggetListHeader = document.getElementById("nugget-list-header");
+var nuggetList = document.getElementById("nugget-list");
 
 // Index data
 var requestMap = {};  // request_id -> request
@@ -103,7 +108,7 @@ if (savedAnnotations) {
 
 // Load saved mode from localStorage
 var savedMode = localStorage.getItem("autojudge_annotate_mode_" + DATA.dataset);
-if (savedMode === "reports" || savedMode === "documents" || savedMode === "citations") {
+if (savedMode === "reports" || savedMode === "documents" || savedMode === "citations" || savedMode === "nuggets") {
   state.mode = savedMode;
 }
 modeSelect.value = state.mode;
@@ -138,6 +143,12 @@ modeSelect.addEventListener("change", function() {
     state.selectedSentenceIdx = 0;
     state.selectedCitationIdx = 0;
     state.selectedDoc = null;
+  } else if (state.mode === "nuggets") {
+    // Clear run selection - will be selected by clicking in ranked list
+    state.selectedRun = null;
+    state.selectedDoc = null;
+    state.selectedSentenceIdx = null;
+    state.selectedCitationIdx = null;
   } else {
     state.selectedDoc = null;
     state.selectedSentenceIdx = null;
