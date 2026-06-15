@@ -4,12 +4,10 @@ HTML_BLOCK = r"""
 <div class="topbar">
   <label for="username-input">Username:</label>
   <input type="text" id="username-input" placeholder="Enter your name...">
-  <label for="mode-select">Mode:</label>
+  <label for="mode-select">Expand:</label>
   <select id="mode-select">
-    <option value="reports">Reports</option>
     <option value="documents">Documents</option>
     <option value="citations">Citations</option>
-    <option value="nuggets">Nuggets</option>
   </select>
   <span id="sync-controls" class="sync-controls">
     <label for="sync-mode">Sync:</label>
@@ -25,14 +23,7 @@ HTML_BLOCK = r"""
 
 <div class="container">
   <div class="sidebar" id="sidebar">
-    <h3>Topics</h3>
-    <div id="topic-list"></div>
-    <h3 id="run-list-header">Runs</h3>
-    <div id="run-list"></div>
-    <h3 id="doc-list-header" style="display:none">Documents</h3>
-    <div id="doc-list"></div>
-    <h3 id="sent-list-header" style="display:none">Sentences</h3>
-    <div id="sent-list"></div>
+    <div id="nav-tree"></div>
     <button class="clear-all-btn" id="clear-all-btn">Clear my annotations for this dataset</button>
   </div>
   <div class="main-panel" id="main-panel">

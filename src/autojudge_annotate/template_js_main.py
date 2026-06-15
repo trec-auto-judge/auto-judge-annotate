@@ -324,15 +324,51 @@ function renderMain() {
     return;
   }
 
-  if (state.mode === "citations") {
+  // View is determined by selection state, not mode
+  // Mode only controls what appears in sidebar fold-out (documents vs citations)
+
+  // 1. If sentence is selected (citations view)
+  if (state.selectedRun && state.selectedSentenceIdx !== null) {
     renderMainCitationsMode();
-  } else if (state.mode === "documents") {
-    renderMainDocMode();
-  } else if (state.mode === "nuggets") {
-    renderMainNuggetsMode();
-  } else {
-    renderMainReportMode();
+    return;
   }
+
+  // 2. If document is selected
+  if (state.selectedRun && state.selectedDoc) {
+    renderMainDocMode();
+    return;
+  }
+
+  // 3. If report is selected (no doc or sentence)
+  if (state.selectedRun) {
+    renderMainReportMode();
+    return;
+  }
+
+  // 4. Topic only - show ranking view
+  renderMainTopicView();
+}
+
+function renderMainTopicView() {
+  var html = renderRequestSection(state.selectedTopic);
+
+  // Criteria panel
+  html += '<div class="criteria-panel">';
+  html += '<h3>Criteria Weights</h3>';
+  html += renderCriteriaPanel(state.selectedTopic);
+  html += '</div>';
+
+  // Report ranking
+  html += '<div class="doc-list-section">';
+  html += '<h3>Reports (ranked by score)</h3>';
+  html += renderReportList(state.selectedTopic);
+  html += '</div>';
+
+  mainPanel.innerHTML = html;
+
+  // Attach handlers for criteria and report list
+  attachCriteriaHandlers();
+  attachReportListHandlers();
 }
 
 function renderMainReportMode() {

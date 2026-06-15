@@ -211,6 +211,12 @@ function attachReportListHandlers() {
     item.onclick = function() {
       var runId = item.getAttribute("data-run-id");
       state.selectedRun = runId;
+      state.selectedDoc = null;
+      state.selectedSentenceIdx = null;
+      state.selectedCitationIdx = null;
+      // Auto-expand the run in sidebar
+      state.expandedRuns[runExpandKey(state.selectedTopic, runId)] = true;
+      renderSidebar();
       renderMain();
     };
   });

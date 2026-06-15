@@ -13,7 +13,8 @@ var state = {
   selectedDoc: null,
   selectedSentenceIdx: null,
   selectedCitationIdx: null,
-  mode: "reports",   // "reports", "documents", "citations", or "nuggets"
+  expandedRuns: {},  // "topicId|runId" -> boolean
+  mode: "documents",   // "documents" or "citations" (controls fold-out content)
   annotations: {},   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
   // Nuggets mode state
   enabledNuggets: {},  // nugget_id -> boolean (default true)
@@ -23,8 +24,7 @@ var state = {
 // DOM refs
 var usernameInput = document.getElementById("username-input");
 var datasetLabel = document.getElementById("dataset-label");
-var topicList = document.getElementById("topic-list");
-var runList = document.getElementById("run-list");
+var navTree = document.getElementById("nav-tree");
 var mainPanel = document.getElementById("main-panel");
 var modalOverlay = document.getElementById("modal-overlay");
 var modalTitle = document.getElementById("modal-title");
@@ -32,13 +32,6 @@ var modalUrl = document.getElementById("modal-url");
 var modalText = document.getElementById("modal-text");
 var modalClose = document.getElementById("modal-close");
 var modeSelect = document.getElementById("mode-select");
-var docListHeader = document.getElementById("doc-list-header");
-var docList = document.getElementById("doc-list");
-var runListHeader = document.getElementById("run-list-header");
-var sentListHeader = document.getElementById("sent-list-header");
-var sentList = document.getElementById("sent-list");
-var nuggetListHeader = document.getElementById("nugget-list-header");
-var nuggetList = document.getElementById("nugget-list");
 
 // Index data
 var requestMap = {};  // request_id -> request
@@ -108,52 +101,21 @@ if (savedAnnotations) {
 
 // Load saved mode from localStorage
 var savedMode = localStorage.getItem("autojudge_annotate_mode_" + DATA.dataset);
-if (savedMode === "reports" || savedMode === "documents" || savedMode === "citations" || savedMode === "nuggets") {
+if (savedMode === "documents" || savedMode === "citations") {
   state.mode = savedMode;
+} else if (savedMode === "reports" || savedMode === "nuggets") {
+  // Migrate legacy modes to "documents"
+  state.mode = "documents";
 }
 modeSelect.value = state.mode;
 
 modeSelect.addEventListener("change", function() {
   state.mode = modeSelect.value;
-  if (state.mode === "documents") {
-    // Ensure a run is selected (keep current or pick first)
-    if (state.selectedTopic) {
-      var availableRuns = reportIndex[state.selectedTopic] ? Object.keys(reportIndex[state.selectedTopic]).sort() : [];
-      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
-        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-      }
-      // Auto-select first document of the run
-      if (state.selectedRun && runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][state.selectedRun]) {
-        var docs = runDocsIndex[state.selectedTopic][state.selectedRun];
-        state.selectedDoc = docs.length > 0 ? docs[0] : null;
-      } else {
-        state.selectedDoc = null;
-      }
-    }
-    state.selectedSentenceIdx = null;
-    state.selectedCitationIdx = null;
-  } else if (state.mode === "citations") {
-    // Ensure a run is selected
-    if (state.selectedTopic) {
-      var availableRuns = reportIndex[state.selectedTopic] ? Object.keys(reportIndex[state.selectedTopic]).sort() : [];
-      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
-        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-      }
-    }
-    state.selectedSentenceIdx = 0;
-    state.selectedCitationIdx = 0;
-    state.selectedDoc = null;
-  } else if (state.mode === "nuggets") {
-    // Clear run selection - will be selected by clicking in ranked list
-    state.selectedRun = null;
-    state.selectedDoc = null;
-    state.selectedSentenceIdx = null;
-    state.selectedCitationIdx = null;
-  } else {
-    state.selectedDoc = null;
-    state.selectedSentenceIdx = null;
-    state.selectedCitationIdx = null;
-  }
+  // Mode controls what appears in fold-out (documents or citations/sentences)
+  // Clear sub-selections when switching
+  state.selectedDoc = null;
+  state.selectedSentenceIdx = null;
+  state.selectedCitationIdx = null;
   localStorage.setItem("autojudge_annotate_mode_" + DATA.dataset, state.mode);
   renderSidebar();
   renderMain();
@@ -214,11 +176,10 @@ function isCitationSentenceComplete(topicId, runId, sentIdx) {
 function getAnnotation(topicId, runId) { return getReportAnnotation(topicId, runId); }
 
 function currentAnnotationKey() {
-  if (state.mode === "documents") {
-    return (state.selectedTopic && state.selectedDoc) ? docAnnotationKey(state.selectedTopic, state.selectedDoc) : null;
-  }
-  if (state.mode === "citations") {
-    if (!state.selectedTopic || !state.selectedRun || state.selectedSentenceIdx === null) return null;
+  // Annotation type is determined by what's selected, not by mode
+  // Priority: citation > document > report
+  if (state.selectedTopic && state.selectedRun && state.selectedSentenceIdx !== null) {
+    // Citation annotation
     var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
     if (!report || !report.sentences || state.selectedSentenceIdx >= report.sentences.length) return null;
     var sent = report.sentences[state.selectedSentenceIdx];
@@ -227,17 +188,21 @@ function currentAnnotationKey() {
     var docId = citations[citIdx] || null;
     return citationAnnotationKey(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
   }
-  // Both "reports" and "nuggets" modes use report annotations
-  return (state.selectedTopic && state.selectedRun) ? reportAnnotationKey(state.selectedTopic, state.selectedRun) : null;
+  if (state.selectedTopic && state.selectedDoc) {
+    // Document annotation
+    return docAnnotationKey(state.selectedTopic, state.selectedDoc);
+  }
+  if (state.selectedTopic && state.selectedRun) {
+    // Report annotation
+    return reportAnnotationKey(state.selectedTopic, state.selectedRun);
+  }
+  return null;
 }
 
 function currentAnnotation() {
-  if (state.mode === "documents") {
-    if (!state.selectedTopic || !state.selectedDoc) return null;
-    return getDocAnnotation(state.selectedTopic, state.selectedDoc);
-  }
-  if (state.mode === "citations") {
-    if (!state.selectedTopic || !state.selectedRun || state.selectedSentenceIdx === null) return null;
+  // Annotation type is determined by what's selected, not by mode
+  if (state.selectedTopic && state.selectedRun && state.selectedSentenceIdx !== null) {
+    // Citation annotation
     var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
     if (!report || !report.sentences || state.selectedSentenceIdx >= report.sentences.length) return null;
     var sent = report.sentences[state.selectedSentenceIdx];
@@ -246,9 +211,15 @@ function currentAnnotation() {
     var docId = citations[citIdx] || null;
     return getCitationAnnotation(state.selectedTopic, state.selectedRun, state.selectedSentenceIdx, docId);
   }
-  // Both "reports" and "nuggets" modes use report annotations
-  if (!state.selectedTopic || !state.selectedRun) return null;
-  return getReportAnnotation(state.selectedTopic, state.selectedRun);
+  if (state.selectedTopic && state.selectedDoc) {
+    // Document annotation
+    return getDocAnnotation(state.selectedTopic, state.selectedDoc);
+  }
+  if (state.selectedTopic && state.selectedRun) {
+    // Report annotation
+    return getReportAnnotation(state.selectedTopic, state.selectedRun);
+  }
+  return null;
 }
 
 function isAnnotated(topicId, runId) {

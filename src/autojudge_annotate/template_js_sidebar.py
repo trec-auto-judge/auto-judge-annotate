@@ -1,4 +1,4 @@
-"""JS sidebar: escapeHtml, abbreviateDocId, countCitationSentences, updateSidebarCounts, renderSidebarCitationsMode, renderSidebar."""
+"""JS sidebar: unified hierarchical navigation (Topics → Reports → Documents/Sentences)."""
 
 JS_SIDEBAR = r"""
 // --- Sidebar ---
@@ -7,6 +7,24 @@ function escapeHtml(str) {
   var div = document.createElement("div");
   div.appendChild(document.createTextNode(str));
   return div.innerHTML;
+}
+
+function abbreviateDocId(docId) {
+  if (docId.length > 25) return docId.substring(0, 22) + "\u2026";
+  return docId;
+}
+
+function runExpandKey(topicId, runId) {
+  return topicId + "|" + runId;
+}
+
+function isRunExpanded(topicId, runId) {
+  return !!state.expandedRuns[runExpandKey(topicId, runId)];
+}
+
+function toggleRunExpanded(topicId, runId) {
+  var key = runExpandKey(topicId, runId);
+  state.expandedRuns[key] = !state.expandedRuns[key];
 }
 
 function countCitationSentences(topicId, runId) {
@@ -20,357 +38,234 @@ function countCitationSentences(topicId, runId) {
   return { done: done, total: total };
 }
 
+// Determine CSS class for topic row based on selection state
+function getTopicClass(topicId) {
+  if (state.selectedTopic !== topicId) return "topic-row";
+  // Topic is selected - check if viewing topic (ranking) or something under it
+  if (!state.selectedRun) return "topic-row active";
+  // A report or doc under this topic is selected
+  return "topic-row parent-active";
+}
+
+// Determine CSS class for report row based on selection state
+function getReportClass(topicId, runId) {
+  if (state.selectedTopic !== topicId || state.selectedRun !== runId) return "report-row";
+  // This report is selected - check if viewing report or a doc/sentence under it
+  if (!state.selectedDoc && state.selectedSentenceIdx === null) return "report-row active";
+  // A doc or sentence under this report is selected
+  return "report-row parent-active";
+}
+
 function updateSidebarCounts() {
-  if (state.mode === "citations") {
-    // Topic counters: done-sentences / total-sentences across all runs
-    topicIds.forEach(function(tid) {
-      var countEl = document.getElementById("topic-count-" + tid);
-      if (countEl) {
-        var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
-        var totalDone = 0, totalAll = 0;
-        runs.forEach(function(rid) {
-          var c = countCitationSentences(tid, rid);
-          totalDone += c.done; totalAll += c.total;
-        });
-        countEl.textContent = "(" + totalDone + "/" + totalAll + ")";
+  // Update checkmarks and counts without full re-render
+  // This is called after autoSave to update visual state
+  topicIds.forEach(function(tid) {
+    var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
+    runs.forEach(function(rid) {
+      // Report checkmark
+      var reportCheck = document.getElementById("report-check-" + CSS.escape(tid) + "-" + CSS.escape(rid));
+      if (reportCheck) {
+        reportCheck.innerHTML = isAnnotated(tid, rid) ? "&#10003;" : "";
       }
-    });
-    // Run counters
-    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-      Object.keys(reportIndex[state.selectedTopic]).forEach(function(rid) {
-        var countEl = document.getElementById("run-count-" + CSS.escape(rid));
-        if (countEl) {
-          var c = countCitationSentences(state.selectedTopic, rid);
-          countEl.textContent = "(" + c.done + "/" + c.total + ")";
+      // Document checkmarks
+      var docs = (runDocsIndex[tid] && runDocsIndex[tid][rid]) || [];
+      docs.forEach(function(did) {
+        var docCheck = document.getElementById("doc-check-" + CSS.escape(tid) + "-" + CSS.escape(did));
+        if (docCheck) {
+          docCheck.innerHTML = isDocAnnotated(tid, did) ? "&#10003;" : "";
         }
       });
-    }
-    // Sentence checkmarks
-    if (state.selectedTopic && state.selectedRun) {
-      var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
+      // Sentence checkmarks (citations mode)
+      var report = reportIndex[tid][rid];
       if (report && report.sentences) {
         report.sentences.forEach(function(sent, idx) {
-          var checkEl = document.getElementById("sent-check-" + idx);
-          if (checkEl) {
-            checkEl.innerHTML = isCitationSentenceComplete(state.selectedTopic, state.selectedRun, idx) ? "&#10003;" : "";
+          var sentCheck = document.getElementById("sent-check-" + CSS.escape(tid) + "-" + CSS.escape(rid) + "-" + idx);
+          if (sentCheck) {
+            sentCheck.innerHTML = isCitationSentenceComplete(tid, rid, idx) ? "&#10003;" : "";
           }
         });
       }
-    }
-    return;
-  }
-  if (state.mode === "documents") {
-    // Document mode: topic counter = unique annotated docs / total unique docs
-    topicIds.forEach(function(tid) {
-      var countEl = document.getElementById("topic-count-" + tid);
-      if (countEl) {
-        var allDocs = docIndex[tid] ? Object.keys(docIndex[tid]) : [];
-        var done = allDocs.filter(function(did) { return isDocAnnotated(tid, did); }).length;
-        countEl.textContent = "(" + done + "/" + allDocs.length + ")";
-      }
     });
-    // Run counter = annotated docs / total docs for that run
-    if (state.selectedTopic && runDocsIndex[state.selectedTopic]) {
-      Object.keys(runDocsIndex[state.selectedTopic]).forEach(function(rid) {
-        var countEl = document.getElementById("run-count-" + CSS.escape(rid));
-        if (countEl) {
-          var docs = runDocsIndex[state.selectedTopic][rid] || [];
-          var done = docs.filter(function(did) { return isDocAnnotated(state.selectedTopic, did); }).length;
-          countEl.textContent = "(" + done + "/" + docs.length + ")";
-        }
-      });
-    }
-    // Doc checkmarks
-    if (state.selectedTopic && state.selectedRun && runDocsIndex[state.selectedTopic]) {
-      var docs = runDocsIndex[state.selectedTopic][state.selectedRun] || [];
-      docs.forEach(function(did) {
-        var checkEl = document.getElementById("doc-check-" + CSS.escape(did));
-        if (checkEl) {
-          checkEl.innerHTML = isDocAnnotated(state.selectedTopic, did) ? "&#10003;" : "";
-        }
-      });
-    }
-  } else {
-    // Report mode: topic counter = annotated runs / total runs
-    topicIds.forEach(function(tid) {
-      var countEl = document.getElementById("topic-count-" + tid);
-      if (countEl) {
-        var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
-        var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
-        countEl.textContent = "(" + done + "/" + runs.length + ")";
-      }
-    });
-    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-      Object.keys(reportIndex[state.selectedTopic]).forEach(function(rid) {
-        var checkEl = document.getElementById("run-check-" + CSS.escape(rid));
-        if (checkEl) {
-          checkEl.innerHTML = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
-        }
-      });
-    }
-  }
-}
-
-function abbreviateDocId(docId) {
-  if (docId.length > 30) return docId.substring(0, 27) + "\u2026";
-  return docId;
-}
-
-function renderSidebarCitationsMode() {
-  runListHeader.textContent = "Runs";
-  docListHeader.style.display = "none";
-  sentListHeader.style.display = "";
-
-  // Topics
-  topicIds.forEach(function(tid) {
-    var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
-    var totalDone = 0, totalAll = 0;
-    runs.forEach(function(rid) {
-      var c = countCitationSentences(tid, rid);
-      totalDone += c.done; totalAll += c.total;
-    });
-
-    var el = document.createElement("div");
-    el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
-    el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + totalDone + "/" + totalAll + ")</span>";
-    el.addEventListener("click", function() {
-      state.selectedTopic = tid;
-      var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-      if (!state.selectedRun || availableRuns.indexOf(state.selectedRun) === -1) {
-        state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-      }
-      state.selectedSentenceIdx = 0;
-      state.selectedCitationIdx = 0;
-      renderSidebar();
-      renderMain();
-    });
-    topicList.appendChild(el);
   });
-
-  // Runs
-  if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-    var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
-    runs.forEach(function(rid) {
-      var report = reportIndex[state.selectedTopic][rid];
-      var c = countCitationSentences(state.selectedTopic, rid);
-
-      var el = document.createElement("div");
-      el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
-      var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
-      el.innerHTML = label + '<span class="progress" id="run-count-' + CSS.escape(rid) + '">(' + c.done + "/" + c.total + ")</span>";
-      el.addEventListener("click", function() {
-        state.selectedRun = rid;
-        state.selectedSentenceIdx = 0;
-        state.selectedCitationIdx = 0;
-        renderSidebar();
-        renderMain();
-      });
-      runList.appendChild(el);
-    });
-  }
-
-  // Sentences
-  if (state.selectedTopic && state.selectedRun) {
-    var report = reportIndex[state.selectedTopic] && reportIndex[state.selectedTopic][state.selectedRun];
-    if (report && report.sentences) {
-      report.sentences.forEach(function(sent, idx) {
-        var el = document.createElement("div");
-        el.className = "sent-item" + (state.selectedSentenceIdx === idx ? " active" : "");
-        var preview = sent.text.length > 30 ? sent.text.substring(0, 30) + "\u2026" : sent.text;
-        var citeCount = (sent.citations && sent.citations.length > 0) ? sent.citations.length : 0;
-        var citeBadge = citeCount > 0 ? ' <span class="cite-count">[' + citeCount + "]</span>" : "";
-        var checkContent = isCitationSentenceComplete(state.selectedTopic, state.selectedRun, idx) ? "&#10003;" : "";
-        el.innerHTML = '<span class="sent-preview">s' + idx + " " + escapeHtml(preview) + "</span>" + citeBadge + '<span class="checkmark" id="sent-check-' + idx + '">' + checkContent + "</span>";
-        el.addEventListener("click", function() {
-          state.selectedSentenceIdx = idx;
-          state.selectedCitationIdx = 0;
-          renderSidebar();
-          renderMain();
-        });
-        sentList.appendChild(el);
-      });
-    }
-  }
-}
-
-function renderSidebarNuggetsMode() {
-  runListHeader.textContent = "Reports";
-  docListHeader.style.display = "none";
-  sentListHeader.style.display = "none";
-
-  // Topics: show nugget count
-  topicIds.forEach(function(tid) {
-    var bank = getNuggetsForTopic(tid);
-    var nuggetCount = (bank.nuggets || []).length;
-
-    var el = document.createElement("div");
-    el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
-    el.innerHTML = escapeHtml(tid) + '<span class="progress">(' + nuggetCount + ' nuggets)</span>';
-    el.addEventListener("click", function() {
-      state.selectedTopic = tid;
-      state.selectedRun = null; // Clear run selection
-      renderSidebar();
-      renderMain();
-    });
-    topicList.appendChild(el);
-  });
-
-  // In nuggets mode, runs are shown in the main panel as a ranked list
-  // Show a message in the run list area
-  var msgEl = document.createElement("div");
-  msgEl.className = "empty-state";
-  msgEl.style.padding = "12px";
-  msgEl.style.fontSize = "12px";
-  msgEl.textContent = "Reports are ranked in the main panel.";
-  runList.appendChild(msgEl);
 }
 
 function renderSidebar() {
-  topicList.innerHTML = "";
-  runList.innerHTML = "";
-  docList.innerHTML = "";
-  sentList.innerHTML = "";
+  navTree.innerHTML = "";
 
-  if (state.mode === "citations") {
-    renderSidebarCitationsMode();
-    return;
-  }
+  topicIds.forEach(function(tid) {
+    // --- Topic row ---
+    var topicEl = document.createElement("div");
+    topicEl.className = getTopicClass(tid);
+    topicEl.textContent = tid;
+    topicEl.addEventListener("click", function() {
+      state.selectedTopic = tid;
+      state.selectedRun = null;
+      state.selectedDoc = null;
+      state.selectedSentenceIdx = null;
+      state.selectedCitationIdx = null;
+      renderSidebar();
+      renderMain();
+    });
+    navTree.appendChild(topicEl);
 
-  if (state.mode === "nuggets") {
-    renderSidebarNuggetsMode();
-    return;
-  }
+    // --- Reports under this topic ---
+    var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
+    runs.forEach(function(rid) {
+      var report = reportIndex[tid][rid];
+      var isExpanded = isRunExpanded(tid, rid);
 
-  if (state.mode === "documents") {
-    runListHeader.textContent = "Runs";
-    docListHeader.style.display = "";
-    sentListHeader.style.display = "none";
+      // Report row
+      var reportEl = document.createElement("div");
+      reportEl.className = getReportClass(tid, rid);
 
-    // Topics: counter = unique annotated docs / total unique docs
-    topicIds.forEach(function(tid) {
-      var allDocs = docIndex[tid] ? Object.keys(docIndex[tid]) : [];
-      var done = allDocs.filter(function(did) { return isDocAnnotated(tid, did); }).length;
+      // Fold arrow
+      var arrow = document.createElement("span");
+      arrow.className = "fold-arrow";
+      arrow.textContent = isExpanded ? "\u25BE" : "\u25B8";
+      arrow.addEventListener("click", function(e) {
+        e.stopPropagation();
+        toggleRunExpanded(tid, rid);
+        renderSidebar();
+      });
+      reportEl.appendChild(arrow);
 
-      var el = document.createElement("div");
-      el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
-      el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + done + "/" + allDocs.length + ")</span>";
-      el.addEventListener("click", function() {
+      // Report name
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "report-name";
+      nameSpan.textContent = rid;
+      nameSpan.title = rid + " (" + report.team_id + ")";
+      reportEl.appendChild(nameSpan);
+
+      // Nugget coverage badge
+      if (typeof countNuggetCoverage === "function") {
+        var cov = countNuggetCoverage(tid, rid);
+        if (cov.total > 0) {
+          var covBadge = document.createElement("span");
+          covBadge.className = "nugget-coverage";
+          covBadge.textContent = cov.satisfied + "/" + cov.total;
+          reportEl.appendChild(covBadge);
+        }
+      }
+
+      // Checkmark for annotated
+      var checkEl = document.createElement("span");
+      checkEl.className = "checkmark";
+      checkEl.id = "report-check-" + CSS.escape(tid) + "-" + CSS.escape(rid);
+      checkEl.innerHTML = isAnnotated(tid, rid) ? "&#10003;" : "";
+      reportEl.appendChild(checkEl);
+
+      // Click to select report
+      reportEl.addEventListener("click", function() {
         state.selectedTopic = tid;
-        var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-        if (state.selectedRun && availableRuns.indexOf(state.selectedRun) === -1) {
-          state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-        } else if (!state.selectedRun && availableRuns.length > 0) {
-          state.selectedRun = availableRuns[0];
-        }
-        // Auto-select first doc for the run
-        if (state.selectedRun && runDocsIndex[tid] && runDocsIndex[tid][state.selectedRun]) {
-          state.selectedDoc = runDocsIndex[tid][state.selectedRun][0] || null;
-        } else {
-          state.selectedDoc = null;
-        }
+        state.selectedRun = rid;
+        state.selectedDoc = null;
+        state.selectedSentenceIdx = null;
+        state.selectedCitationIdx = null;
+        // Auto-expand when selecting
+        state.expandedRuns[runExpandKey(tid, rid)] = true;
         renderSidebar();
         renderMain();
       });
-      topicList.appendChild(el);
-    });
+      navTree.appendChild(reportEl);
 
-    // Runs: counter = annotated docs / total docs for this run
-    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-      var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
-      runs.forEach(function(rid) {
-        var report = reportIndex[state.selectedTopic][rid];
-        var docs = (runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][rid]) || [];
-        var done = docs.filter(function(did) { return isDocAnnotated(state.selectedTopic, did); }).length;
+      // --- Fold-out content (documents or sentences) ---
+      if (isExpanded) {
+        var foldout = document.createElement("div");
+        foldout.className = "foldout-list";
 
-        var el = document.createElement("div");
-        el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
-        var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
-        el.innerHTML = label + '<span class="progress" id="run-count-' + CSS.escape(rid) + '">(' + done + "/" + docs.length + ")</span>";
-        el.addEventListener("click", function() {
-          state.selectedRun = rid;
-          // Auto-select first doc
-          var rdocs = (runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][rid]) || [];
-          state.selectedDoc = rdocs.length > 0 ? rdocs[0] : null;
-          renderSidebar();
-          renderMain();
-        });
-        runList.appendChild(el);
-      });
-    }
+        if (state.mode === "citations") {
+          // Show sentences
+          if (report.sentences) {
+            report.sentences.forEach(function(sent, idx) {
+              var sentEl = document.createElement("div");
+              var isActive = state.selectedTopic === tid && state.selectedRun === rid && state.selectedSentenceIdx === idx;
+              sentEl.className = "foldout-item" + (isActive ? " active" : "");
 
-    // Documents: checkmark per doc
-    if (state.selectedTopic && state.selectedRun && runDocsIndex[state.selectedTopic] && runDocsIndex[state.selectedTopic][state.selectedRun]) {
-      var docs = runDocsIndex[state.selectedTopic][state.selectedRun];
-      docs.forEach(function(did) {
-        var el = document.createElement("div");
-        el.className = "doc-item" + (state.selectedDoc === did ? " active" : "");
-        var displayId = abbreviateDocId(did);
-        var checkContent = isDocAnnotated(state.selectedTopic, did) ? "&#10003;" : "";
-        el.innerHTML = escapeHtml(displayId) + '<span class="checkmark" id="doc-check-' + CSS.escape(did) + '">' + checkContent + '</span>';
-        el.title = did;
-        el.addEventListener("click", function() {
-          state.selectedDoc = did;
-          renderSidebar();
-          renderMain();
-        });
-        docList.appendChild(el);
-      });
-    }
+              var preview = sent.text.length > 20 ? sent.text.substring(0, 20) + "\u2026" : sent.text;
+              var citeCount = (sent.citations && sent.citations.length > 0) ? sent.citations.length : 0;
 
-  } else {
-    // Report mode (unchanged logic)
-    runListHeader.textContent = "Runs";
-    docListHeader.style.display = "none";
-    sentListHeader.style.display = "none";
+              var idSpan = document.createElement("span");
+              idSpan.className = "foldout-id";
+              idSpan.textContent = "s" + idx;
+              sentEl.appendChild(idSpan);
 
-    topicIds.forEach(function(tid) {
-      var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-      var done = runs.filter(function(rid) { return isAnnotated(tid, rid); }).length;
+              var previewSpan = document.createElement("span");
+              previewSpan.className = "foldout-preview";
+              previewSpan.textContent = preview;
+              previewSpan.title = sent.text;
+              sentEl.appendChild(previewSpan);
 
-      var el = document.createElement("div");
-      el.className = "topic-item" + (state.selectedTopic === tid ? " active" : "");
-      el.innerHTML = escapeHtml(tid) + '<span class="progress" id="topic-count-' + escapeHtml(tid) + '">(' + done + "/" + runs.length + ")</span>";
-      el.addEventListener("click", function() {
-        state.selectedTopic = tid;
-        var availableRuns = reportIndex[tid] ? Object.keys(reportIndex[tid]).sort() : [];
-        if (state.selectedRun && availableRuns.indexOf(state.selectedRun) === -1) {
-          state.selectedRun = availableRuns.length > 0 ? availableRuns[0] : null;
-        } else if (!state.selectedRun && availableRuns.length > 0) {
-          state.selectedRun = availableRuns[0];
-        }
-        renderSidebar();
-        renderMain();
-      });
-      topicList.appendChild(el);
-    });
+              if (citeCount > 0) {
+                var citeBadge = document.createElement("span");
+                citeBadge.className = "cite-count";
+                citeBadge.textContent = "[" + citeCount + "]";
+                sentEl.appendChild(citeBadge);
+              }
 
-    if (state.selectedTopic && reportIndex[state.selectedTopic]) {
-      var runs = Object.keys(reportIndex[state.selectedTopic]).sort();
-      runs.forEach(function(rid) {
-        var report = reportIndex[state.selectedTopic][rid];
-        var el = document.createElement("div");
-        el.className = "run-item" + (state.selectedRun === rid ? " active" : "");
-        var label = escapeHtml(rid) + " (" + escapeHtml(report.team_id) + ")";
-        var checkContent = isAnnotated(state.selectedTopic, rid) ? "&#10003;" : "";
+              var sentCheck = document.createElement("span");
+              sentCheck.className = "checkmark";
+              sentCheck.id = "sent-check-" + CSS.escape(tid) + "-" + CSS.escape(rid) + "-" + idx;
+              sentCheck.innerHTML = isCitationSentenceComplete(tid, rid, idx) ? "&#10003;" : "";
+              sentEl.appendChild(sentCheck);
 
-        // Add nugget coverage if nugget banks are available
-        var nuggetBadge = "";
-        if (typeof countNuggetCoverage === "function") {
-          var cov = countNuggetCoverage(state.selectedTopic, rid);
-          if (cov.total > 0) {
-            nuggetBadge = '<span class="nugget-coverage" id="nugget-cov-' + CSS.escape(rid) + '">' + cov.satisfied + '/' + cov.total + '</span>';
+              sentEl.addEventListener("click", function() {
+                state.selectedTopic = tid;
+                state.selectedRun = rid;
+                state.selectedDoc = null;
+                state.selectedSentenceIdx = idx;
+                state.selectedCitationIdx = 0;
+                renderSidebar();
+                renderMain();
+              });
+              foldout.appendChild(sentEl);
+            });
           }
-        }
+        } else {
+          // Show documents (default)
+          var docs = (runDocsIndex[tid] && runDocsIndex[tid][rid]) || [];
+          docs.forEach(function(did) {
+            var docEl = document.createElement("div");
+            var isActive = state.selectedTopic === tid && state.selectedRun === rid && state.selectedDoc === did;
+            docEl.className = "foldout-item" + (isActive ? " active" : "");
 
-        el.innerHTML = label + nuggetBadge + '<span class="checkmark" id="run-check-' + CSS.escape(rid) + '">' + checkContent + '</span>';
-        el.addEventListener("click", function() {
-          state.selectedRun = rid;
-          renderSidebar();
-          renderMain();
-        });
-        runList.appendChild(el);
-      });
-    }
-  }
+            var idSpan = document.createElement("span");
+            idSpan.className = "foldout-id";
+            idSpan.textContent = abbreviateDocId(did);
+            idSpan.title = did;
+            docEl.appendChild(idSpan);
+
+            // Document nugget coverage
+            if (typeof countDocNuggetCoverage === "function") {
+              var docCov = countDocNuggetCoverage(tid, did);
+              if (docCov.total > 0) {
+                var docCovBadge = document.createElement("span");
+                docCovBadge.className = "nugget-coverage";
+                docCovBadge.textContent = docCov.satisfied + "/" + docCov.total;
+                docEl.appendChild(docCovBadge);
+              }
+            }
+
+            var docCheck = document.createElement("span");
+            docCheck.className = "checkmark";
+            docCheck.id = "doc-check-" + CSS.escape(tid) + "-" + CSS.escape(did);
+            docCheck.innerHTML = isDocAnnotated(tid, did) ? "&#10003;" : "";
+            docEl.appendChild(docCheck);
+
+            docEl.addEventListener("click", function() {
+              state.selectedTopic = tid;
+              state.selectedRun = rid;
+              state.selectedDoc = did;
+              state.selectedSentenceIdx = null;
+              state.selectedCitationIdx = null;
+              renderSidebar();
+              renderMain();
+            });
+            foldout.appendChild(docEl);
+          });
+        }
+        navTree.appendChild(foldout);
+      }
+    });
+  });
 }
 """

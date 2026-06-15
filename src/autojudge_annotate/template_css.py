@@ -41,6 +41,88 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .run-item .checkmark { margin-left: auto; color: #27ae60; font-weight: bold; }
 .run-item .nugget-coverage { font-size: 11px; color: #6c757d; background: #e9ecef; padding: 1px 5px; border-radius: 10px; margin-left: 6px; }
 
+/* Hierarchical sidebar - Topics → Reports → Documents/Sentences */
+.topic-row {
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+.topic-row:hover { background: #e0e4ed; }
+.topic-row.active { background: #3498db; color: #fff; }
+.topic-row.parent-active { background: #aed6f1; }
+
+.report-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px 6px 20px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  gap: 6px;
+}
+.report-row:hover { background: #e0e4ed; }
+.report-row.active { background: #3498db; color: #fff; }
+.report-row.parent-active { background: #aed6f1; }
+
+.fold-arrow {
+  width: 16px;
+  font-size: 10px;
+  color: #666;
+  flex-shrink: 0;
+  user-select: none;
+}
+.report-row.active .fold-arrow { color: #fff; }
+.fold-arrow:hover { color: #3498db; }
+.report-row.active .fold-arrow:hover { color: #cce5ff; }
+
+.report-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.nugget-coverage {
+  font-size: 11px;
+  color: #6c757d;
+  background: #e9ecef;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.report-row.active .nugget-coverage { background: rgba(255,255,255,0.3); color: #fff; }
+.report-row.parent-active .nugget-coverage { background: rgba(255,255,255,0.6); color: #2c3e50; }
+.topic-row.parent-active .nugget-coverage { background: rgba(255,255,255,0.6); color: #2c3e50; }
+
+.checkmark { color: #27ae60; font-weight: bold; flex-shrink: 0; margin-left: 4px; }
+.report-row.active .checkmark { color: #90EE90; }
+.report-row.parent-active .checkmark { color: #1e8449; }
+
+/* Foldout list (documents or sentences) */
+.foldout-list { margin-left: 20px; }
+.foldout-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px 4px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 1px;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+}
+.foldout-item:hover { background: #e0e4ed; }
+.foldout-item.active { background: #5dade2; color: #fff; }
+
+.foldout-id { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foldout-preview { flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; }
+.foldout-item.active .foldout-preview { color: #dbeafe; }
+.foldout-item .nugget-coverage { font-size: 10px; padding: 1px 5px; }
+.foldout-item.active .nugget-coverage { background: rgba(255,255,255,0.3); color: #fff; }
+.foldout-item .checkmark { font-size: 12px; }
+.foldout-item.active .checkmark { color: #90EE90; }
+
+.cite-count { font-size: 10px; color: #888; flex-shrink: 0; }
+.foldout-item.active .cite-count { color: #dbeafe; }
+
 /* Request section */
 .request-section { margin-bottom: 24px; padding: 16px; background: #f0f4f8; border-radius: 8px; border-left: 4px solid #3498db; }
 .request-section h2 { font-size: 16px; margin-bottom: 8px; color: #2c3e50; }

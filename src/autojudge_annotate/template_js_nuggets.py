@@ -274,4 +274,35 @@ function countNuggetCoverage(topicId, runId) {
 
   return { satisfied: satisfied, total: total };
 }
+
+// Count nugget coverage for a single document
+// Returns {satisfied: N, total: M} where satisfied means doc_ids includes this docId
+function countDocNuggetCoverage(topicId, docId) {
+  var bank = getNuggetsForTopic(topicId);
+  var nuggets = bank.nuggets || [];
+  var claims = bank.claims || [];
+  var total = nuggets.length + claims.length;
+
+  if (total === 0) {
+    return { satisfied: 0, total: 0 };
+  }
+
+  var satisfied = 0;
+
+  // Check nugget questions
+  nuggets.forEach(function(n) {
+    if (docSatisfiesNugget(n, docId)) {
+      satisfied++;
+    }
+  });
+
+  // Check claims
+  claims.forEach(function(c) {
+    if (docSatisfiesNugget(c, docId)) {
+      satisfied++;
+    }
+  });
+
+  return { satisfied: satisfied, total: total };
+}
 """

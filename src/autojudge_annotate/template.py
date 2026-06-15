@@ -26,9 +26,9 @@ HTML_TEMPLATE = (
     + HTML_BLOCK
     + '\n<script>\n(function() {\n"use strict";\n'
     + JS_STATE + '\n'
-    + JS_SIDEBAR + '\n'
     + JS_NUGGETS + '\n'
     + JS_NUGGETS_MODE + '\n'
+    + JS_SIDEBAR + '\n'
     + JS_MAIN + '\n'
     + JS_SPANS + '\n'
     + JS_SYNC + '\n'
