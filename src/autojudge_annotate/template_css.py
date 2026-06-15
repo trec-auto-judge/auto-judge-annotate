@@ -296,4 +296,50 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .verdict-unknown { color: #6c757d; }
 
 .doc-text { line-height: 1.7; white-space: pre-wrap; font-size: 13px; color: #333; max-height: 400px; overflow-y: auto; padding: 12px; background: #fafafa; border-radius: 4px; }
+
+/* Nugget Clues Section */
+.nugget-clues-section { margin: 16px 0; padding: 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; }
+.nugget-clues-section h3 { font-size: 14px; margin-bottom: 12px; color: #495057; }
+.nugget-clues-section .clue-count { font-weight: normal; color: #6c757d; }
+
+.clue-add-controls { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.add-clue-btn { padding: 6px 12px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.add-clue-btn:hover { background: #218838; }
+
+.clue-type-radios { display: flex; gap: 4px; }
+.clue-type-radio { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 12px; background: #fff; transition: all 0.15s; }
+.clue-type-radio:hover { background: #f8f9fa; }
+.clue-type-radio input { margin: 0; }
+.clue-type-radio input:checked + span { font-weight: 600; }
+.clue-type-radio.clue-type-must_have input:checked + span { color: #155724; }
+.clue-type-radio.clue-type-should_have input:checked + span { color: #856404; }
+.clue-type-radio.clue-type-avoid input:checked + span { color: #721c24; }
+.clue-type-radio.clue-type-must_have:has(input:checked) { background: #d4edda; border-color: #28a745; }
+.clue-type-radio.clue-type-should_have:has(input:checked) { background: #fff3cd; border-color: #ffc107; }
+.clue-type-radio.clue-type-avoid:has(input:checked) { background: #f8d7da; border-color: #dc3545; }
+
+.clue-help { font-size: 12px; color: #6c757d; margin-bottom: 12px; font-style: italic; }
+
+.clue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+.clue-item { padding: 10px 12px; border-radius: 6px; background: #fff; border: 1px solid #dee2e6; }
+.clue-item.clue-type-must_have { border-left: 4px solid #28a745; }
+.clue-item.clue-type-should_have { border-left: 4px solid #ffc107; }
+.clue-item.clue-type-avoid { border-left: 4px solid #dc3545; }
+
+.clue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.clue-type-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+.clue-type-must_have .clue-type-badge { background: #d4edda; color: #155724; }
+.clue-type-should_have .clue-type-badge { background: #fff3cd; color: #856404; }
+.clue-type-avoid .clue-type-badge { background: #f8d7da; color: #721c24; }
+
+.clue-delete-btn { background: none; border: none; color: #dc3545; font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; }
+.clue-delete-btn:hover { color: #a71d2a; }
+
+.clue-spans { margin-bottom: 6px; }
+.clue-span-chip { display: inline-block; background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin: 2px 4px 2px 0; color: #495057; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.clue-comment { font-size: 13px; color: #495057; line-height: 1.4; padding: 6px 0; border-top: 1px solid #eee; margin-top: 6px; }
+
+.clue-linked { font-size: 11px; color: #6c757d; margin-top: 4px; }
 """

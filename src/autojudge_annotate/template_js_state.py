@@ -129,16 +129,20 @@ function docAnnotationKey(topicId, docId) { return "d|" + topicId + "|" + docId;
 function getReportAnnotation(topicId, runId) {
   var key = reportAnnotationKey(topicId, runId);
   if (!state.annotations[key]) {
-    state.annotations[key] = { topicId: topicId, runId: runId, rating: "Not rated", comment: "", spans: [] };
+    state.annotations[key] = { topicId: topicId, runId: runId, rating: "Not rated", comment: "", spans: [], nugget_clues: [] };
   }
+  // Migrate old annotations without nugget_clues
+  if (!state.annotations[key].nugget_clues) state.annotations[key].nugget_clues = [];
   return state.annotations[key];
 }
 
 function getDocAnnotation(topicId, docId) {
   var key = docAnnotationKey(topicId, docId);
   if (!state.annotations[key]) {
-    state.annotations[key] = { topicId: topicId, docId: docId, rating: "Not rated", comment: "", spans: [] };
+    state.annotations[key] = { topicId: topicId, docId: docId, rating: "Not rated", comment: "", spans: [], nugget_clues: [] };
   }
+  // Migrate old annotations without nugget_clues
+  if (!state.annotations[key].nugget_clues) state.annotations[key].nugget_clues = [];
   return state.annotations[key];
 }
 
@@ -150,8 +154,10 @@ function citationAnnotationKey(topicId, runId, sentIdx, docId) {
 function getCitationAnnotation(topicId, runId, sentIdx, docId) {
   var key = citationAnnotationKey(topicId, runId, sentIdx, docId);
   if (!state.annotations[key]) {
-    state.annotations[key] = { topicId: topicId, runId: runId, sentenceIdx: sentIdx, docId: docId || null, rating: "Not rated", comment: "", spans: [], reportSpans: [] };
+    state.annotations[key] = { topicId: topicId, runId: runId, sentenceIdx: sentIdx, docId: docId || null, rating: "Not rated", comment: "", spans: [], reportSpans: [], nugget_clues: [] };
   }
+  // Migrate old annotations without nugget_clues
+  if (!state.annotations[key].nugget_clues) state.annotations[key].nugget_clues = [];
   return state.annotations[key];
 }
 
@@ -264,10 +270,11 @@ function autoSave() {
 function isAnnotatedByKey(key) {
   var ann = state.annotations[key];
   if (!ann) return false;
+  var hasNuggetClues = ann.nugget_clues && ann.nugget_clues.length > 0;
   if (key.indexOf("c|") === 0) {
-    return (ann.spans && ann.spans.length > 0) || (ann.reportSpans && ann.reportSpans.length > 0) || ann.rating !== "Not rated" || ann.comment !== "";
+    return (ann.spans && ann.spans.length > 0) || (ann.reportSpans && ann.reportSpans.length > 0) || ann.rating !== "Not rated" || ann.comment !== "" || hasNuggetClues;
   }
-  return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
+  return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "" || hasNuggetClues;
 }
 
 function buildOutputRecords(includeAll) {
@@ -305,6 +312,16 @@ function buildOutputRecords(includeAll) {
         report_spans: (ann.reportSpans || []).map(function(s) {
           return { start: s.start, end: s.end, text: s.text };
         }),
+        nugget_clues: (ann.nugget_clues || []).map(function(clue) {
+          return {
+            clue_type: clue.clue_type,
+            comment: clue.comment || "",
+            spans: (clue.spans || []).map(function(s) {
+              return { start: s.start, end: s.end, text: s.text };
+            }),
+            linked_nugget_id: clue.linked_nugget_id || null
+          };
+        }),
         citation: {
           report: report,
           sentence_idx: sentIdx,
@@ -330,6 +347,16 @@ function buildOutputRecords(includeAll) {
         comment: ann.comment,
         spans: ann.spans.map(function(s) {
           return { start: s.start, end: s.end, text: s.text };
+        }),
+        nugget_clues: (ann.nugget_clues || []).map(function(clue) {
+          return {
+            clue_type: clue.clue_type,
+            comment: clue.comment || "",
+            spans: (clue.spans || []).map(function(s) {
+              return { start: s.start, end: s.end, text: s.text };
+            }),
+            linked_nugget_id: clue.linked_nugget_id || null
+          };
         }),
         document: doc
       };
@@ -360,6 +387,16 @@ function buildOutputRecords(includeAll) {
           if (s.sentence_idx !== undefined) o.sentence_idx = s.sentence_idx;
           return o;
         }),
+        nugget_clues: (ann.nugget_clues || []).map(function(clue) {
+          return {
+            clue_type: clue.clue_type,
+            comment: clue.comment || "",
+            spans: (clue.spans || []).map(function(s) {
+              return { start: s.start, end: s.end, text: s.text };
+            }),
+            linked_nugget_id: clue.linked_nugget_id || null
+          };
+        }),
         report: report
       };
       records.push({key: key, record: obj});
@@ -370,5 +407,57 @@ function buildOutputRecords(includeAll) {
 
 function buildOutputLines() {
   return buildOutputRecords().map(function(r) { return JSON.stringify(r.record); });
+}
+
+// --- Centralized Reset Function ---
+// Call this when clearing all annotations to ensure all UI state is reset.
+// Add new UI state variables here when adding new features.
+
+function resetAllAnnotationState() {
+  // 1. Clear annotation data
+  state.annotations = {};
+  localStorage.removeItem("autojudge_annotate_state_" + DATA.dataset);
+
+  // 2. Reset nugget clue UI state
+  if (typeof pendingClueType !== "undefined") {
+    pendingClueType = "must_have";
+  }
+  if (typeof clueCreationMode !== "undefined") {
+    clueCreationMode = false;
+  }
+
+  // 3. Reset nugget mode state (weights, enabled nuggets)
+  state.enabledNuggets = {};
+  state.nuggetWeights = { must: 1.0 };
+
+  // 4. Force fresh annotation objects by clearing and restoring selection
+  // This ensures no stale references persist
+  var savedTopic = state.selectedTopic;
+  var savedRun = state.selectedRun;
+  var savedDoc = state.selectedDoc;
+  var savedSentenceIdx = state.selectedSentenceIdx;
+  var savedCitationIdx = state.selectedCitationIdx;
+
+  // Temporarily clear selections
+  state.selectedTopic = null;
+  state.selectedRun = null;
+  state.selectedDoc = null;
+  state.selectedSentenceIdx = null;
+  state.selectedCitationIdx = null;
+
+  // Render empty state (no form fields shown)
+  renderSidebar();
+  renderMain();
+
+  // Restore selections - this creates FRESH annotation objects
+  state.selectedTopic = savedTopic;
+  state.selectedRun = savedRun;
+  state.selectedDoc = savedDoc;
+  state.selectedSentenceIdx = savedSentenceIdx;
+  state.selectedCitationIdx = savedCitationIdx;
+
+  // Final render with clean state
+  renderSidebar();
+  renderMain();
 }
 """

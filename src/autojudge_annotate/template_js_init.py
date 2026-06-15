@@ -53,8 +53,10 @@ function handleDownload() {
 // Clear all annotations
 document.getElementById("clear-all-btn").addEventListener("click", function() {
   if (!confirm("Clear all your annotations for this dataset? This cannot be undone.")) return;
-  state.annotations = {};
-  localStorage.removeItem("autojudge_annotate_state_" + DATA.dataset);
+
+  // Use centralized reset function (defined in template_js_state.py)
+  resetAllAnnotationState();
+
   // Also delete from server if online and connected
   if (syncMode === "online" && typeof syncDeleteAll === "function") {
     syncDeleteAll().then(function(ok) {
@@ -62,8 +64,6 @@ document.getElementById("clear-all-btn").addEventListener("click", function() {
       else setSyncStatus("error");
     });
   }
-  renderSidebar();
-  renderMain();
 });
 
 // Initial render — auto-select first topic, first run, and mode-specific defaults

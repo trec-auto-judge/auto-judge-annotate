@@ -28,22 +28,27 @@ function renderRequestSection(topicId) {
 function renderAnnotationControls(ann, skipSpans) {
   var html = '';
 
-  // Spans list (skipped in citations mode which handles spans separately)
-  if (!skipSpans) {
-    html += '<div class="spans-section"><h3>Selected Spans</h3><div id="spans-display"></div></div>';
-  }
-
-  // Rating
-  html += '<div class="rating-section"><h3>Rating</h3><div class="rating-options">';
+  // Rating (first, to clarify this is a document/report rating)
+  html += '<div class="rating-section"><h3>Document Rating</h3><div class="rating-options">';
   ["Not rated", "Perfect", "Mostly Good", "So-so", "Bad"].forEach(function(r) {
     var checked = (ann.rating === r) ? " checked" : "";
     html += '<label><input type="radio" name="rating" value="' + escapeHtml(r) + '"' + checked + '><span>' + escapeHtml(r) + "</span></label>";
   });
   html += "</div></div>";
 
+  // Spans list (skipped in citations mode which handles spans separately)
+  if (!skipSpans) {
+    html += '<div class="spans-section"><h3>Selected Spans</h3><div id="spans-display"></div></div>';
+  }
+
   // Comment
   html += '<div class="comment-section"><h3>Comments</h3>';
   html += '<textarea id="comment-input" placeholder="Optional comments...">' + escapeHtml(ann.comment) + '</textarea></div>';
+
+  // Nugget clues section
+  if (typeof renderNuggetCluesSection === "function") {
+    html += renderNuggetCluesSection(ann);
+  }
 
   // Output section
   var annotatedCount = Object.keys(state.annotations).filter(function(k) { return isAnnotatedByKey(k); }).length;
@@ -83,6 +88,11 @@ function attachAnnotationHandlers() {
 
   var outputArea = document.getElementById("output-area");
   outputArea.value = buildOutputLines().join("\n");
+
+  // Attach nugget clue handlers
+  if (typeof attachClueHandlers === "function") {
+    attachClueHandlers();
+  }
 }
 
 // --- Citations mode sub-functions ---
