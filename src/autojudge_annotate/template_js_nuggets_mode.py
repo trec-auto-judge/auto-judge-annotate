@@ -3,6 +3,113 @@
 JS_NUGGETS_MODE = r"""
 // --- Nuggets Mode ---
 
+// Count how many reports/documents satisfy a nugget
+// Returns {reportsSatisfied, reportsPartial, reportsTotal, docsSatisfied, docsTotal}
+function countNuggetCoverageStats(topicId, nuggetId, nugget) {
+  var stats = {
+    reportsSatisfied: 0,
+    reportsPartial: 0,
+    reportsTotal: 0,
+    docsSatisfied: 0,
+    docsTotal: 0
+  };
+
+  // Count reports
+  if (reportIndex[topicId]) {
+    var runs = Object.keys(reportIndex[topicId]);
+    stats.reportsTotal = runs.length;
+    runs.forEach(function(runId) {
+      var grade = getReportGrade(topicId, runId, nuggetId);
+      if (grade && grade.grade >= 4) {
+        stats.reportsSatisfied++;
+      } else if (grade && grade.grade >= 1) {
+        stats.reportsPartial++;
+      }
+    });
+  }
+
+  // Count documents (if nugget has doc_ids)
+  if (nugget && nugget.doc_ids) {
+    // Get all unique documents across all reports for this topic
+    var allDocs = {};
+    if (reportIndex[topicId]) {
+      Object.keys(reportIndex[topicId]).forEach(function(runId) {
+        var report = reportIndex[topicId][runId];
+        if (report && report.documents) {
+          Object.keys(report.documents).forEach(function(docId) {
+            allDocs[docId] = true;
+          });
+        }
+      });
+    }
+    var allDocIds = Object.keys(allDocs);
+    stats.docsTotal = allDocIds.length;
+
+    allDocIds.forEach(function(docId) {
+      if (nugget.doc_ids.indexOf(docId) !== -1) {
+        stats.docsSatisfied++;
+      }
+    });
+  }
+
+  return stats;
+}
+
+// Format nugget coverage stats as a string (e.g., "3/8 (+2 partial)")
+function formatNuggetCoverageStats(stats) {
+  var parts = [];
+
+  // Reports coverage
+  if (stats.reportsTotal > 0) {
+    var reportStr = stats.reportsSatisfied + "/" + stats.reportsTotal;
+    if (stats.reportsPartial > 0) {
+      reportStr += " (+" + stats.reportsPartial + ")";
+    }
+    parts.push(reportStr + " reports");
+  }
+
+  // Document coverage (only show if we have doc_ids data)
+  if (stats.docsTotal > 0) {
+    parts.push(stats.docsSatisfied + "/" + stats.docsTotal + " docs");
+  }
+
+  return parts.join(", ");
+}
+
+// Collect all canonicalized nuggets from clues for a topic
+function getCanonicalizedNuggetsForTopic(topicId) {
+  var result = [];
+  var seen = {};
+
+  Object.keys(state.annotations).forEach(function(key) {
+    var ann = state.annotations[key];
+    // Check if this annotation is for the given topic
+    if (ann.topicId !== topicId) return;
+    if (!ann.nugget_clues) return;
+
+    ann.nugget_clues.forEach(function(clue, clueIdx) {
+      if (clue.canonicalized && clue.canonicalized.nugget_text) {
+        // Create a unique ID for this canonicalized nugget
+        var nuggetId = "user_" + key + "_" + clueIdx;
+        if (seen[nuggetId]) return;
+        seen[nuggetId] = true;
+
+        result.push({
+          nugget_id: nuggetId,
+          text: clue.canonicalized.nugget_text,
+          nugget_type: clue.clue_type,
+          explanation: clue.canonicalized.explanation,
+          source: "user",  // Mark as user-created
+          annotation_key: key,
+          clue_idx: clueIdx
+        });
+      }
+    });
+  });
+
+  return result;
+}
+
 // Compute score for a report based on current weights and enabled nuggets
 function computeReportScore(topicId, runId) {
   var bank = getNuggetsForTopic(topicId);
@@ -71,14 +178,20 @@ function getReportSummary(topicId, runId) {
 function renderCriteriaPanel(topicId) {
   var bank = getNuggetsForTopic(topicId);
   var nuggets = bank.nuggets || [];
+  var userNuggets = getCanonicalizedNuggetsForTopic(topicId);
 
-  if (nuggets.length === 0) {
+  // Separate user nuggets by type
+  var userMustHave = userNuggets.filter(function(n) { return n.nugget_type === "must_have"; });
+  var userShouldHave = userNuggets.filter(function(n) { return n.nugget_type === "should_have"; });
+  var userAvoid = userNuggets.filter(function(n) { return n.nugget_type === "avoid"; });
+
+  if (nuggets.length === 0 && userNuggets.length === 0) {
     return '<div class="empty-state">No nuggets for this topic.</div>';
   }
 
   var html = '';
 
-  // Must-have category (only category for now)
+  // Must-have category
   html += '<div class="category-section">';
   html += '<div class="category-header">';
   html += '<span class="category-name">Must Have</span>';
@@ -89,13 +202,61 @@ function renderCriteriaPanel(topicId) {
   nuggets.forEach(function(n) {
     var enabled = state.enabledNuggets[n.nugget_id] !== false;
     var checked = enabled ? "checked" : "";
+    var stats = countNuggetCoverageStats(topicId, n.nugget_id, n);
+    var coverageStr = formatNuggetCoverageStats(stats);
+
     html += '<div class="nugget-item criteria-nugget-item">';
     html += '<input type="checkbox" id="nug_' + n.nugget_id + '" data-nugget-id="' + n.nugget_id + '" ' + checked + '>';
     html += '<label for="nug_' + n.nugget_id + '">' + escapeHtml(n.text) + '</label>';
+    if (coverageStr) {
+      html += '<span class="nugget-coverage" title="Coverage across responses">' + escapeHtml(coverageStr) + '</span>';
+    }
+    html += '</div>';
+  });
+
+  // User-created must-have nuggets (shown with ? indicator)
+  userMustHave.forEach(function(n) {
+    html += '<div class="nugget-item criteria-nugget-item user-nugget">';
+    html += '<span class="nugget-status-unknown" title="Not yet graded">?</span>';
+    html += '<label title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</label>';
     html += '</div>';
   });
   html += '</div>';
   html += '</div>';
+
+  // Should-have category (if any user nuggets)
+  if (userShouldHave.length > 0) {
+    html += '<div class="category-section">';
+    html += '<div class="category-header">';
+    html += '<span class="category-name">Should Have</span>';
+    html += '</div>';
+    html += '<div class="nugget-list criteria-nugget-list">';
+    userShouldHave.forEach(function(n) {
+      html += '<div class="nugget-item criteria-nugget-item user-nugget">';
+      html += '<span class="nugget-status-unknown" title="Not yet graded">?</span>';
+      html += '<label title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</label>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // Avoid category (if any user nuggets)
+  if (userAvoid.length > 0) {
+    html += '<div class="category-section">';
+    html += '<div class="category-header">';
+    html += '<span class="category-name">Avoid</span>';
+    html += '</div>';
+    html += '<div class="nugget-list criteria-nugget-list">';
+    userAvoid.forEach(function(n) {
+      html += '<div class="nugget-item criteria-nugget-item user-nugget nugget-avoid">';
+      html += '<span class="nugget-status-unknown" title="Not yet graded">?</span>';
+      html += '<label title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</label>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
+  }
 
   return html;
 }
@@ -136,6 +297,7 @@ function renderReportViewer(topicId, runId) {
 
   var bank = getNuggetsForTopic(topicId);
   var nuggets = bank.nuggets || [];
+  var userNuggets = getCanonicalizedNuggetsForTopic(topicId);
 
   var html = '<div class="doc-viewer">';
 
@@ -168,6 +330,14 @@ function renderReportViewer(topicId, runId) {
     if (grade && grade.reasoning) {
       html += '<span class="verdict-reasoning" title="' + escapeHtml(grade.reasoning) + '">...</span>';
     }
+    html += '</div>';
+  });
+
+  // User-created nuggets (not yet graded) - same style with "?" icon
+  userNuggets.forEach(function(n) {
+    html += '<div class="verdict-item">';
+    html += '<span class="verdict-icon verdict-unknown">?</span>';
+    html += '<span class="verdict-text">' + escapeHtml(n.text) + '</span>';
     html += '</div>';
   });
 

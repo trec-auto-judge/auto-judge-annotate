@@ -66,6 +66,11 @@ document.getElementById("clear-all-btn").addEventListener("click", function() {
   }
 });
 
+// Initialize LLM indicator in topbar
+if (typeof initLlmIndicator === "function") {
+  initLlmIndicator();
+}
+
 // Initial render — auto-select first topic, first run, and mode-specific defaults
 if (topicIds.length > 0) {
   state.selectedTopic = topicIds[0];

@@ -64,15 +64,31 @@ function renderClueItem(clue, idx) {
     html += '</div>';
   }
 
-  // Show comment if any
-  if (clue.comment) {
-    html += '<div class="clue-comment">' + escapeHtml(clue.comment) + '</div>';
-  }
-
   // Show linked nugget if any
   if (clue.linked_nugget_id) {
     html += '<div class="clue-linked">Linked to: ' + escapeHtml(clue.linked_nugget_id) + '</div>';
   }
+
+  // Show canonicalized nugget if present
+  if (clue.canonicalized) {
+    html += '<div class="clue-canonicalized">';
+    html += '<div class="clue-canon-label">Canonicalized Nugget:</div>';
+    html += '<div class="clue-canon-text">' + escapeHtml(clue.canonicalized.nugget_text) + '</div>';
+    if (clue.canonicalized.explanation) {
+      html += '<div class="clue-canon-explanation">' + escapeHtml(clue.canonicalized.explanation) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Editable comment field and action buttons
+  html += '<div class="clue-actions">';
+  html += '<input type="text" class="clue-comment-input" data-clue-idx="' + idx + '" placeholder="Clarification comment for LLM..." value="' + escapeHtml(clue.comment || '') + '">';
+  if (!clue.canonicalized) {
+    html += '<button class="clue-canonicalize-btn" data-clue-idx="' + idx + '">Canonicalize</button>';
+  } else {
+    html += '<button class="clue-canonicalize-btn" data-clue-idx="' + idx + '">Re-canonicalize</button>';
+  }
+  html += '</div>';
 
   html += '</div>';
   return html;
@@ -157,6 +173,53 @@ function attachClueHandlers() {
       var idx = parseInt(this.getAttribute("data-clue-idx"));
       if (confirm("Delete this nugget clue?")) {
         deleteNuggetClue(idx);
+      }
+    });
+  });
+
+  // Clue comment input fields
+  var commentInputs = document.querySelectorAll(".clue-comment-input");
+  commentInputs.forEach(function(input) {
+    input.addEventListener("change", function() {
+      var idx = parseInt(this.getAttribute("data-clue-idx"));
+      var ann = currentAnnotation();
+      if (!ann || !ann.nugget_clues || idx >= ann.nugget_clues.length) return;
+      ann.nugget_clues[idx].comment = this.value.trim();
+      autoSave();
+    });
+  });
+
+  // Canonicalize buttons
+  var canonBtns = document.querySelectorAll(".clue-canonicalize-btn");
+  canonBtns.forEach(function(btn) {
+    btn.addEventListener("click", async function(e) {
+      e.stopPropagation();
+      var idx = parseInt(this.getAttribute("data-clue-idx"));
+      var ann = currentAnnotation();
+      if (!ann || !ann.nugget_clues || idx >= ann.nugget_clues.length) return;
+
+      var clue = ann.nugget_clues[idx];
+
+      // Update comment from input field before canonicalizing
+      var commentInput = document.querySelector('.clue-comment-input[data-clue-idx="' + idx + '"]');
+      if (commentInput) {
+        clue.comment = commentInput.value.trim();
+      }
+
+      // Show loading state
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+
+      try {
+        var result = await canonicalizeClue(clue, state.selectedTopic);
+        if (result) {
+          clue.canonicalized = result;
+          autoSave();
+          renderMain();
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = clue.canonicalized ? "Re-canonicalize" : "Canonicalize";
       }
     });
   });

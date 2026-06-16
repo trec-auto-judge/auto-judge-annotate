@@ -231,7 +231,20 @@ function currentAnnotation() {
 function isAnnotated(topicId, runId) {
   var ann = state.annotations[reportAnnotationKey(topicId, runId)];
   if (!ann) return false;
-  return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "";
+  return ann.spans.length > 0 || ann.rating !== "Not rated" || ann.comment !== "" ||
+         (ann.nugget_clues && ann.nugget_clues.length > 0);
+}
+
+function hasNuggetClues(topicId, runId) {
+  var ann = state.annotations[reportAnnotationKey(topicId, runId)];
+  if (!ann) return false;
+  return ann.nugget_clues && ann.nugget_clues.length > 0;
+}
+
+function hasDocNuggetClues(topicId, docId) {
+  var ann = state.annotations[docAnnotationKey(topicId, docId)];
+  if (!ann) return false;
+  return ann.nugget_clues && ann.nugget_clues.length > 0;
 }
 
 function isDocAnnotated(topicId, docId) {

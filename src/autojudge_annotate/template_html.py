@@ -17,6 +17,10 @@ HTML_BLOCK = r"""
     </select>
     <span class="sync-status sync-idle" id="sync-status"></span>
   </span>
+  <span id="llm-controls" class="llm-controls">
+    <label>LLM:</label>
+    <span class="llm-indicator" id="llm-indicator" title="Click to set API key">?</span>
+  </span>
   <span class="dataset-label" id="dataset-label"></span>
 </div>
 <div class="username-banner" id="username-banner">Please enter a username above before annotating.</div>

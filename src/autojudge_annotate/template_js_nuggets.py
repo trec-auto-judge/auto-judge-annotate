@@ -84,7 +84,15 @@ function renderNuggetPanel(topicId, currentDocIds) {
   var nuggets = bank.nuggets || [];
   var claims = bank.claims || [];
 
-  if (nuggets.length === 0 && claims.length === 0) {
+  // Get user-created nuggets from canonicalized clues
+  var userNuggets = [];
+  if (typeof getCanonicalizedNuggetsForTopic === "function") {
+    userNuggets = getCanonicalizedNuggetsForTopic(topicId);
+  }
+
+  var totalCount = nuggets.length + claims.length + userNuggets.length;
+
+  if (totalCount === 0) {
     return ''; // No nuggets for this topic
   }
 
@@ -93,7 +101,7 @@ function renderNuggetPanel(topicId, currentDocIds) {
   var isReportMode = state.mode === "reports";
 
   var html = '<div class="nugget-panel">';
-  html += '<h3 class="nugget-panel-header">Nuggets (' + (nuggets.length + claims.length) + ')</h3>';
+  html += '<h3 class="nugget-panel-header">Nuggets (' + totalCount + ')</h3>';
 
   // Render nugget questions
   if (nuggets.length > 0) {
@@ -199,6 +207,19 @@ function renderNuggetPanel(topicId, currentDocIds) {
       html += '</div>';
     });
     html += '</div>';
+    html += '</div>';
+  }
+
+  // Render user-created nuggets (from canonicalized clues) - same style as other nuggets
+  if (userNuggets.length > 0) {
+    html += '<div class="nugget-list">';
+    userNuggets.forEach(function(n) {
+      var verdict = unknownVerdict();
+      html += '<div class="nugget-item ' + verdict.cls + '">';
+      html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
+      html += '<span class="nugget-text">' + escapeHtml(n.text) + '</span>';
+      html += '</div>';
+    });
     html += '</div>';
   }
 

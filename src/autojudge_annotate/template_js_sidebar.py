@@ -62,14 +62,23 @@ function updateSidebarCounts() {
   topicIds.forEach(function(tid) {
     var runs = reportIndex[tid] ? Object.keys(reportIndex[tid]) : [];
     runs.forEach(function(rid) {
+      // Report clues indicator
+      var reportClues = document.getElementById("report-clues-" + CSS.escape(tid) + "-" + CSS.escape(rid));
+      if (reportClues) {
+        reportClues.innerHTML = hasNuggetClues(tid, rid) ? "&#9776;" : "";
+      }
       // Report checkmark
       var reportCheck = document.getElementById("report-check-" + CSS.escape(tid) + "-" + CSS.escape(rid));
       if (reportCheck) {
         reportCheck.innerHTML = isAnnotated(tid, rid) ? "&#10003;" : "";
       }
-      // Document checkmarks
+      // Document clues indicators and checkmarks
       var docs = (runDocsIndex[tid] && runDocsIndex[tid][rid]) || [];
       docs.forEach(function(did) {
+        var docClues = document.getElementById("doc-clues-" + CSS.escape(tid) + "-" + CSS.escape(did));
+        if (docClues) {
+          docClues.innerHTML = hasDocNuggetClues(tid, did) ? "&#9776;" : "";
+        }
         var docCheck = document.getElementById("doc-check-" + CSS.escape(tid) + "-" + CSS.escape(did));
         if (docCheck) {
           docCheck.innerHTML = isDocAnnotated(tid, did) ? "&#10003;" : "";
@@ -146,6 +155,14 @@ function renderSidebar() {
           reportEl.appendChild(covBadge);
         }
       }
+
+      // Clues indicator (hamburger icon)
+      var cluesEl = document.createElement("span");
+      cluesEl.className = "clues-indicator";
+      cluesEl.id = "report-clues-" + CSS.escape(tid) + "-" + CSS.escape(rid);
+      cluesEl.innerHTML = hasNuggetClues(tid, rid) ? "&#9776;" : "";
+      cluesEl.title = "Has nugget clues";
+      reportEl.appendChild(cluesEl);
 
       // Checkmark for annotated
       var checkEl = document.createElement("span");
@@ -244,6 +261,14 @@ function renderSidebar() {
                 docEl.appendChild(docCovBadge);
               }
             }
+
+            // Document clues indicator (hamburger icon)
+            var docCluesEl = document.createElement("span");
+            docCluesEl.className = "clues-indicator";
+            docCluesEl.id = "doc-clues-" + CSS.escape(tid) + "-" + CSS.escape(did);
+            docCluesEl.innerHTML = hasDocNuggetClues(tid, did) ? "&#9776;" : "";
+            docCluesEl.title = "Has nugget clues";
+            docEl.appendChild(docCluesEl);
 
             var docCheck = document.createElement("span");
             docCheck.className = "checkmark";
