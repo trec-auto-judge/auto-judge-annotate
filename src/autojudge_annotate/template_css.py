@@ -269,6 +269,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .doc-id { flex: 1; font-weight: 500; color: #2c3e50; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-score { font-weight: 600; min-width: 50px; text-align: right; }
 .doc-summary { font-size: 11px; color: #888; min-width: 120px; text-align: right; }
+.doc-annotated { color: #27ae60; font-weight: bold; font-size: 14px; flex-shrink: 0; min-width: 18px; text-align: center; }
+.doc-item.active .doc-annotated { color: #1e8449; }
 
 .score-high { color: #27ae60; }
 .score-medium { color: #f39c12; }

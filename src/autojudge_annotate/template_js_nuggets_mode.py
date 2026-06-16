@@ -119,6 +119,7 @@ function renderReportList(topicId) {
     html += '<span class="doc-id">' + escapeHtml(item.runId) + '</span>';
     html += '<span class="doc-score ' + scoreClass + '">' + score.toFixed(2) + '</span>';
     html += '<span class="doc-summary">' + escapeHtml(getReportSummary(topicId, item.runId)) + '</span>';
+    html += '<span class="doc-annotated">' + (isAnnotated(topicId, item.runId) ? '&#10003;' : '') + '</span>';
     html += '</div>';
   });
   html += '</div>';
