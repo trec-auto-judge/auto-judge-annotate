@@ -18,7 +18,13 @@ var state = {
   annotations: {},   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
   // Nuggets mode state
   enabledNuggets: {},  // nugget_id -> boolean (default true)
-  nuggetWeights: { must: 1.0 }  // category -> weight
+  nuggetWeights: { must: 1.0, should: 1.0, avoid: -1.0 },  // category -> weight
+  nuggetPanelCollapsed: {},  // "panel" | "must_have" | "should_have" | "avoid" | "claims" -> boolean
+  soloNuggetId: null,  // nugget_id of currently soloed nugget (null = no solo)
+  preSoloEnabledNuggets: null,  // snapshot of enabledNuggets before solo (to restore)
+  preSoloNuggetIds: null,  // list of nugget IDs that existed before solo (to detect new nuggets)
+  // User-generated nugget grades (from LLM grading)
+  userNuggetGrades: {}  // topicId -> runId -> nuggetId -> {grade, reasoning, confidence}
 };
 
 // DOM refs
@@ -108,6 +114,19 @@ if (savedMode === "documents" || savedMode === "citations") {
   state.mode = "documents";
 }
 modeSelect.value = state.mode;
+
+// Load saved user nugget grades from localStorage
+var savedUserGrades = localStorage.getItem("autojudge_annotate_grades_" + DATA.dataset);
+if (savedUserGrades) {
+  try {
+    state.userNuggetGrades = JSON.parse(savedUserGrades);
+  } catch(e) { state.userNuggetGrades = {}; }
+}
+
+// Save user nugget grades to localStorage
+function saveUserNuggetGrades() {
+  localStorage.setItem("autojudge_annotate_grades_" + DATA.dataset, JSON.stringify(state.userNuggetGrades));
+}
 
 modeSelect.addEventListener("change", function() {
   state.mode = modeSelect.value;
@@ -439,9 +458,15 @@ function resetAllAnnotationState() {
     clueCreationMode = false;
   }
 
-  // 3. Reset nugget mode state (weights, enabled nuggets)
+  // 3. Reset nugget mode state (weights, enabled nuggets, user grades, collapsed state, solo)
   state.enabledNuggets = {};
-  state.nuggetWeights = { must: 1.0 };
+  state.nuggetWeights = { must: 1.0, should: 1.0, avoid: -1.0 };
+  state.nuggetPanelCollapsed = {};
+  state.soloNuggetId = null;
+  state.preSoloEnabledNuggets = null;
+  state.preSoloNuggetIds = null;
+  state.userNuggetGrades = {};
+  localStorage.removeItem("autojudge_annotate_grades_" + DATA.dataset);
 
   // 4. Force fresh annotation objects by clearing and restoring selection
   // This ensures no stale references persist

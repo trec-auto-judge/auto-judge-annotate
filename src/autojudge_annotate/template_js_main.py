@@ -415,6 +415,7 @@ function renderMainReportMode() {
   refreshReportHighlights();
 
   attachAnnotationHandlers();
+  attachNuggetPanelHandlers();
   renderSpans();
 }
 
@@ -457,6 +458,7 @@ function renderMainDocMode() {
   refreshDocHighlights();
 
   attachAnnotationHandlers();
+  attachNuggetPanelHandlers();
   renderSpans();
 }
 """

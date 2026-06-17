@@ -25,26 +25,28 @@ function getReportDocIds(report) {
 
 // Get report grade for a nugget
 // Returns: {grade, reasoning, confidence} or null if no grade
+// Checks both DATA.nugget_grades (pre-loaded) and state.userNuggetGrades (user-generated)
 function getReportGrade(topicId, runId, nuggetId) {
+  // First check user-generated grades (these take precedence)
+  if (state.userNuggetGrades[topicId] &&
+      state.userNuggetGrades[topicId][runId] &&
+      state.userNuggetGrades[topicId][runId][nuggetId]) {
+    return state.userNuggetGrades[topicId][runId][nuggetId];
+  }
+
+  // Then check pre-loaded grades from DATA
   if (!DATA.nugget_grades) {
-    console.log("No nugget_grades in DATA");
     return null;
   }
   var topicGrades = DATA.nugget_grades[topicId];
   if (!topicGrades) {
-    console.log("No grades for topic:", topicId, "Available topics:", Object.keys(DATA.nugget_grades));
     return null;
   }
   var runGrades = topicGrades[runId];
   if (!runGrades) {
-    console.log("No grades for run:", runId, "Available runs:", Object.keys(topicGrades));
     return null;
   }
-  var grade = runGrades[nuggetId];
-  if (!grade) {
-    console.log("No grade for nugget:", nuggetId, "Available nuggets:", Object.keys(runGrades).slice(0, 5));
-  }
-  return grade || null;
+  return runGrades[nuggetId] || null;
 }
 
 // Determine verdict class and icon based on grade
@@ -76,6 +78,82 @@ function buildSourceDesc(reportGrade, satisfyingDocs) {
   return parts.join(" + ");
 }
 
+// Render a single nugget item
+function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds, isUserNugget) {
+  var satisfyingDocs = [];
+
+  // Check if any of the current docs satisfy this nugget (not applicable for user nuggets)
+  if (!isUserNugget && currentDocIds && currentDocIds.length > 0) {
+    currentDocIds.forEach(function(docId) {
+      if (docSatisfiesNugget(n, docId)) {
+        satisfyingDocs.push(docId);
+      }
+    });
+  }
+
+  // Get report grade if in report mode
+  var reportGrade = null;
+  if (isReportMode && currentRunId) {
+    reportGrade = getReportGrade(topicId, currentRunId, n.nugget_id);
+  }
+
+  // Determine verdict
+  var verdict;
+  if (reportGrade) {
+    verdict = gradeToVerdict(reportGrade.grade);
+  } else if (satisfyingDocs.length > 0) {
+    verdict = { cls: "nugget-satisfied", icon: "&#10003;", label: "satisfied" };
+  } else if (isUserNugget) {
+    verdict = unknownVerdict();
+  } else if (isReportMode && !n.has_grades) {
+    verdict = unknownVerdict();
+  } else if (!isReportMode && !n.has_doc_info) {
+    verdict = unknownVerdict();
+  } else {
+    verdict = { cls: "nugget-not-satisfied", icon: "&#10007;", label: "not satisfied" };
+  }
+
+  // Build source description
+  var sourceDesc = buildSourceDesc(reportGrade, satisfyingDocs);
+
+  var html = '<div class="nugget-item ' + verdict.cls + (isUserNugget ? ' user-nugget-item' : '') + '">';
+  html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
+  html += '<span class="nugget-text">' + escapeHtml(n.text) + '</span>';
+  if (sourceDesc) {
+    var tooltip = satisfyingDocs.length > 0 ? satisfyingDocs.join(', ') : '';
+    if (reportGrade && reportGrade.reasoning) {
+      tooltip = (tooltip ? tooltip + '\\n\\n' : '') + 'Reasoning: ' + reportGrade.reasoning;
+    }
+    html += '<span class="nugget-docs" title="' + escapeHtml(tooltip) + '">';
+    html += '(' + sourceDesc + ')';
+    html += '</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Render a category section with header
+function renderNuggetCategory(categoryName, categoryClass, nuggetItems, collapsed) {
+  if (nuggetItems.length === 0) return '';
+
+  var collapseClass = collapsed ? ' collapsed' : '';
+  var html = '<div class="nugget-category ' + categoryClass + collapseClass + '">';
+  html += '<div class="nugget-category-header" data-category="' + categoryClass + '">';
+  html += '<span class="nugget-category-toggle">&#9656;</span>';
+  html += '<span class="nugget-category-name">' + categoryName + '</span>';
+  html += '<span class="nugget-category-count">(' + nuggetItems.length + ')</span>';
+  html += '</div>';
+  html += '<div class="nugget-category-content">';
+  html += '<div class="nugget-list">';
+  nuggetItems.forEach(function(item) {
+    html += item;
+  });
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
 // Render the nugget panel for a topic
 // In report mode: show report grades + doc satisfaction
 // In document mode: show which nuggets the current doc satisfies
@@ -98,133 +176,117 @@ function renderNuggetPanel(topicId, currentDocIds) {
 
   // Get current run for report mode grades
   var currentRunId = state.selectedRun || null;
-  var isReportMode = state.mode === "reports";
+  var isReportMode = (currentRunId !== null && state.selectedDoc === null && state.selectedSentenceIdx === null);
 
-  var html = '<div class="nugget-panel">';
-  html += '<h3 class="nugget-panel-header">Nuggets (' + totalCount + ')</h3>';
-
-  // Render nugget questions
-  if (nuggets.length > 0) {
-    html += '<div class="nugget-list">';
-    nuggets.forEach(function(n) {
-      var satisfyingDocs = [];
-
-      // Check if any of the current docs satisfy this nugget
-      if (currentDocIds && currentDocIds.length > 0) {
-        currentDocIds.forEach(function(docId) {
-          if (docSatisfiesNugget(n, docId)) {
-            satisfyingDocs.push(docId);
-          }
-        });
-      }
-
-      // Get report grade if in report mode
-      var reportGrade = null;
-      if (isReportMode && currentRunId) {
-        reportGrade = getReportGrade(topicId, currentRunId, n.nugget_id);
-      }
-
-      // Determine verdict: use report grade if available, else doc satisfaction
-      // Use "unknown" state when we don't have relevant evaluation data
-      var verdict;
-      if (reportGrade) {
-        verdict = gradeToVerdict(reportGrade.grade);
-      } else if (satisfyingDocs.length > 0) {
-        verdict = { cls: "nugget-satisfied", icon: "&#10003;", label: "satisfied" };
-      } else if (isReportMode && !n.has_grades) {
-        // In report mode but no grade data exists for this nugget
-        verdict = unknownVerdict();
-      } else if (!isReportMode && !n.has_doc_info) {
-        // In document mode but no doc_ids data exists for this nugget
-        verdict = unknownVerdict();
-      } else {
-        verdict = { cls: "nugget-not-satisfied", icon: "&#10007;", label: "not satisfied" };
-      }
-
-      // Build source description
-      var sourceDesc = buildSourceDesc(reportGrade, satisfyingDocs);
-
-      html += '<div class="nugget-item ' + verdict.cls + '">';
-      html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
-      html += '<span class="nugget-text">' + escapeHtml(n.text) + '</span>';
-      if (sourceDesc) {
-        var tooltip = satisfyingDocs.length > 0 ? satisfyingDocs.join(', ') : '';
-        if (reportGrade && reportGrade.reasoning) {
-          tooltip = (tooltip ? tooltip + '\\n\\n' : '') + 'Reasoning: ' + reportGrade.reasoning;
-        }
-        html += '<span class="nugget-docs" title="' + escapeHtml(tooltip) + '">';
-        html += '(' + sourceDesc + ')';
-        html += '</span>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
+  // Initialize collapsed state if not set
+  if (!state.nuggetPanelCollapsed) {
+    state.nuggetPanelCollapsed = {};
   }
 
-  // Render claims (if any)
-  if (claims.length > 0) {
-    html += '<div class="nugget-claims-section">';
-    html += '<h4>Claims</h4>';
-    html += '<div class="nugget-list">';
-    claims.forEach(function(c) {
-      var satisfyingDocs = [];
+  // Group all nuggets by type (only show enabled nuggets)
+  var mustHaveItems = [];
+  var shouldHaveItems = [];
+  var avoidItems = [];
+  var claimItems = [];
+  var enabledCount = 0;
 
-      if (currentDocIds && currentDocIds.length > 0) {
-        currentDocIds.forEach(function(docId) {
-          if (docSatisfiesNugget(c, docId)) {
-            satisfyingDocs.push(docId);
-          }
-        });
-      }
+  // Pre-loaded nuggets (default to must_have if no type specified)
+  nuggets.forEach(function(n) {
+    // Skip disabled nuggets
+    if (state.enabledNuggets[n.nugget_id] === false) return;
+    enabledCount++;
+    var itemHtml = renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds, false);
+    var nuggetType = n.nugget_type || "must_have";
+    if (nuggetType === "should_have") {
+      shouldHaveItems.push(itemHtml);
+    } else if (nuggetType === "avoid") {
+      avoidItems.push(itemHtml);
+    } else {
+      mustHaveItems.push(itemHtml);
+    }
+  });
 
-      // Get report grade for claims (using claim_id)
-      var reportGrade = null;
-      if (isReportMode && currentRunId) {
-        reportGrade = getReportGrade(topicId, currentRunId, c.claim_id);
-      }
+  // User-created nuggets
+  userNuggets.forEach(function(n) {
+    // Skip disabled nuggets
+    if (state.enabledNuggets[n.nugget_id] === false) return;
+    enabledCount++;
+    var itemHtml = renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds, true);
+    if (n.nugget_type === "should_have") {
+      shouldHaveItems.push(itemHtml);
+    } else if (n.nugget_type === "avoid") {
+      avoidItems.push(itemHtml);
+    } else {
+      mustHaveItems.push(itemHtml);
+    }
+  });
 
-      var verdict;
-      if (reportGrade) {
-        verdict = gradeToVerdict(reportGrade.grade);
-      } else if (satisfyingDocs.length > 0) {
-        verdict = { cls: "nugget-satisfied", icon: "&#10003;", label: "satisfied" };
-      } else if (isReportMode && !c.has_grades) {
-        verdict = unknownVerdict();
-      } else if (!isReportMode && !c.has_doc_info) {
-        verdict = unknownVerdict();
-      } else {
-        verdict = { cls: "nugget-not-satisfied", icon: "&#10007;", label: "not satisfied" };
-      }
+  // Claims
+  claims.forEach(function(c) {
+    // Skip disabled claims
+    if (state.enabledNuggets[c.claim_id] === false) return;
+    enabledCount++;
+    // Claims use claim_id instead of nugget_id
+    var cAsNugget = { nugget_id: c.claim_id, text: c.text, doc_ids: c.doc_ids, has_grades: c.has_grades, has_doc_info: c.has_doc_info };
+    var itemHtml = renderNuggetItem(cAsNugget, topicId, currentRunId, isReportMode, currentDocIds, false);
+    claimItems.push(itemHtml);
+  });
 
-      var sourceDesc = buildSourceDesc(reportGrade, satisfyingDocs);
-
-      html += '<div class="nugget-item ' + verdict.cls + '">';
-      html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
-      html += '<span class="nugget-text">' + escapeHtml(c.text) + '</span>';
-      if (sourceDesc) {
-        html += '<span class="nugget-docs">(' + sourceDesc + ')</span>';
-      }
-      html += '</div>';
-    });
-    html += '</div>';
-    html += '</div>';
+  // If no enabled nuggets, don't show the panel
+  if (enabledCount === 0) {
+    return '';
   }
 
-  // Render user-created nuggets (from canonicalized clues) - same style as other nuggets
-  if (userNuggets.length > 0) {
-    html += '<div class="nugget-list">';
-    userNuggets.forEach(function(n) {
-      var verdict = unknownVerdict();
-      html += '<div class="nugget-item ' + verdict.cls + '">';
-      html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
-      html += '<span class="nugget-text">' + escapeHtml(n.text) + '</span>';
-      html += '</div>';
-    });
-    html += '</div>';
-  }
+  // Build panel HTML
+  var panelCollapsed = state.nuggetPanelCollapsed["panel"] === true;
+  var html = '<div class="nugget-panel' + (panelCollapsed ? ' collapsed' : '') + '">';
+  html += '<h3 class="nugget-panel-header" data-panel="nuggets">';
+  html += '<span class="nugget-panel-toggle">&#9656;</span>';
+  html += 'Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')';
+  html += '</h3>';
+  html += '<div class="nugget-panel-content">';
+
+  // Render each category
+  html += renderNuggetCategory('Must Have', 'cat-must-have', mustHaveItems, state.nuggetPanelCollapsed["must_have"]);
+  html += renderNuggetCategory('Should Have', 'cat-should-have', shouldHaveItems, state.nuggetPanelCollapsed["should_have"]);
+  html += renderNuggetCategory('Avoid', 'cat-avoid', avoidItems, state.nuggetPanelCollapsed["avoid"]);
+  html += renderNuggetCategory('Claims', 'cat-claims', claimItems, state.nuggetPanelCollapsed["claims"]);
 
   html += '</div>';
+  html += '</div>';
   return html;
+}
+
+// Attach nugget panel toggle handlers
+function attachNuggetPanelHandlers() {
+  // Main panel toggle
+  var panelHeader = document.querySelector('.nugget-panel-header[data-panel="nuggets"]');
+  if (panelHeader) {
+    panelHeader.onclick = function() {
+      if (!state.nuggetPanelCollapsed) state.nuggetPanelCollapsed = {};
+      state.nuggetPanelCollapsed["panel"] = !state.nuggetPanelCollapsed["panel"];
+      var panel = panelHeader.closest('.nugget-panel');
+      if (panel) {
+        panel.classList.toggle('collapsed', state.nuggetPanelCollapsed["panel"]);
+      }
+    };
+  }
+
+  // Category toggles
+  var categoryHeaders = document.querySelectorAll('.nugget-category-header');
+  categoryHeaders.forEach(function(header) {
+    header.onclick = function(e) {
+      e.stopPropagation();
+      var catClass = header.getAttribute('data-category');
+      var catKey = catClass.replace('cat-', '').replace('-', '_');
+      if (!state.nuggetPanelCollapsed) state.nuggetPanelCollapsed = {};
+      state.nuggetPanelCollapsed[catKey] = !state.nuggetPanelCollapsed[catKey];
+      var category = header.closest('.nugget-category');
+      if (category) {
+        category.classList.toggle('collapsed', state.nuggetPanelCollapsed[catKey]);
+      }
+    };
+  });
 }
 
 // Get current document IDs based on mode

@@ -228,10 +228,28 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 /* Nugget panel */
 .nugget-panel { margin: 16px 0; padding: 12px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; }
-.nugget-panel-header { font-size: 14px; color: #495057; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-.nugget-panel-header::before { content: ""; display: inline-block; width: 0; height: 0; border-left: 5px solid #495057; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.2s; }
-.nugget-panel.collapsed .nugget-panel-header::before { transform: rotate(90deg); }
-.nugget-panel.collapsed .nugget-list, .nugget-panel.collapsed .nugget-claims-section { display: none; }
+.nugget-panel-header { font-size: 14px; color: #495057; margin-bottom: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none; }
+.nugget-panel-toggle { display: inline-block; transition: transform 0.2s; font-size: 10px; transform: rotate(90deg); }
+.nugget-panel.collapsed .nugget-panel-toggle { transform: rotate(0deg); }
+.nugget-panel.collapsed .nugget-panel-content { display: none; }
+.nugget-panel-content { }
+
+/* Nugget categories */
+.nugget-category { margin-bottom: 12px; }
+.nugget-category:last-child { margin-bottom: 0; }
+.nugget-category-header { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 0; user-select: none; }
+.nugget-category-toggle { display: inline-block; transition: transform 0.2s; font-size: 10px; color: #6c757d; transform: rotate(90deg); }
+.nugget-category.collapsed .nugget-category-toggle { transform: rotate(0deg); }
+.nugget-category.collapsed .nugget-category-content { display: none; }
+.nugget-category-name { font-size: 12px; font-weight: 600; color: #495057; text-transform: uppercase; letter-spacing: 0.5px; }
+.nugget-category-count { font-size: 11px; color: #6c757d; }
+.nugget-category-content { padding-left: 8px; margin-top: 4px; }
+
+/* Category-specific styling - all same color for consistency */
+.cat-must-have .nugget-category-name,
+.cat-should-have .nugget-category-name,
+.cat-avoid .nugget-category-name,
+.cat-claims .nugget-category-name { color: #2c3e50; }
 
 .nugget-list { display: flex; flex-direction: column; gap: 2px; }
 .nugget-item { display: flex; align-items: flex-start; gap: 8px; padding: 2px 4px; font-size: 12px; line-height: 1.4; }
@@ -239,6 +257,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .nugget-item.nugget-partial { background: #fffdf5; }
 .nugget-item.nugget-not-satisfied { background: #fff8f8; }
 .nugget-item.nugget-unknown { background: #f8f9fa; }
+.nugget-item.user-nugget-item { background: #f0f8ff; }
 
 .nugget-verdict { font-size: 12px; flex-shrink: 0; min-width: 16px; }
 .nugget-satisfied .nugget-verdict { color: #28a745; }
@@ -248,9 +267,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 .nugget-text { flex: 1; }
 .nugget-docs { font-size: 11px; color: #6c757d; flex-shrink: 0; cursor: help; }
-
-.nugget-claims-section { margin-top: 12px; }
-.nugget-claims-section h4 { font-size: 12px; color: #6c757d; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 
 /* Nuggets mode - criteria panel */
 .criteria-panel { margin-bottom: 24px; padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
@@ -266,15 +282,40 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 .criteria-nugget-list { margin-left: 20px; }
 .criteria-nugget-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
-.criteria-nugget-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.criteria-nugget-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; accent-color: #0d6efd; }
 .criteria-nugget-item label { font-size: 13px; line-height: 1.4; color: #555; cursor: pointer; flex: 1; }
 .criteria-nugget-item label:hover { color: #2c3e50; }
 .nugget-coverage { font-size: 11px; color: #6c757d; background: #f1f3f4; padding: 2px 6px; border-radius: 10px; white-space: nowrap; margin-left: auto; }
 
 /* User-created nuggets */
-.user-nugget { background: #f0f8ff; border-left: 3px solid #007bff; padding-left: 8px; }
-.user-nugget.nugget-avoid { background: #fff5f5; border-left-color: #dc3545; }
-.nugget-status-unknown { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #6c757d; color: #fff; border-radius: 50%; font-size: 12px; font-weight: bold; flex-shrink: 0; margin-right: 4px; }
+.user-nugget { background: #f0f8ff; }
+.user-nugget.nugget-avoid { background: #fff5f5; }
+.nugget-text-span { font-size: 13px; line-height: 1.4; color: #555; flex: 1; }
+
+/* Grade button for ungraded nuggets */
+.grade-btn { padding: 2px 8px; font-size: 10px; background: #6c757d; color: #fff; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-right: 4px; }
+.grade-btn:hover { background: #5a6268; }
+
+/* Re-grade button (after grading complete) */
+.regrade-nugget-btn { padding: 2px 8px; font-size: 10px; background: #e9ecef; color: #495057; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-right: 8px; }
+.regrade-nugget-btn:hover { background: #dee2e6; }
+.regrade-nugget-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Solo button - matches checkbox accent color */
+.solo-btn { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #fff; color: #6c757d; border: 1px solid #ced4da; border-radius: 50%; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; flex-shrink: 0; margin-right: 4px; padding: 0; }
+.solo-btn:hover { border-color: #86b7fe; }
+.solo-btn.soloed { background: #0d6efd; border-color: #0d6efd; color: #fff; }
+
+/* Solo mode bar */
+.solo-mode-bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; margin-bottom: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; }
+.solo-mode-label { font-size: 12px; color: #495057; }
+.unsolo-btn { padding: 3px 8px; font-size: 11px; background: #fff; color: #495057; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; }
+.unsolo-btn:hover { background: #e9ecef; }
+
+/* Inline progress indicator (replaces ? during grading) */
+.grading-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 18px; background: #e3f2fd; color: #1976d2; border-radius: 9px; font-size: 10px; font-weight: 600; flex-shrink: 0; margin-right: 4px; }
+.grading-progress-inline.grading-active { background: #e3f2fd; color: #1976d2; }
+.grading-progress-inline.grading-done { background: #e8f5e9; color: #2e7d32; }
 
 /* Nuggets mode - document list */
 .doc-list-section { margin-bottom: 24px; }
@@ -378,10 +419,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .clue-canonicalize-btn:disabled { background: #6c757d; cursor: wait; }
 
 /* Canonicalized nugget display */
-.clue-canonicalized { margin-top: 10px; padding: 10px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px; }
-.clue-canon-label { font-size: 11px; color: #388e3c; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
-.clue-canon-text { font-size: 14px; color: #1b5e20; font-weight: 500; line-height: 1.4; }
-.clue-canon-explanation { font-size: 12px; color: #558b2f; margin-top: 6px; font-style: italic; }
+.clue-canonicalized { margin-top: 10px; padding: 10px; border-radius: 6px; }
+.clue-canon-label { font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+.clue-canon-text { font-size: 14px; font-weight: 500; line-height: 1.4; }
+.clue-canon-explanation { font-size: 12px; margin-top: 6px; font-style: italic; }
+
+/* Canonicalized nugget type-specific colors */
+.canon-type-must_have { background: #e8f5e9; border: 1px solid #a5d6a7; }
+.canon-type-must_have .clue-canon-label { color: #388e3c; }
+.canon-type-must_have .clue-canon-text { color: #1b5e20; }
+.canon-type-must_have .clue-canon-explanation { color: #558b2f; }
+
+.canon-type-should_have { background: #fff8e1; border: 1px solid #ffe082; }
+.canon-type-should_have .clue-canon-label { color: #f57f17; }
+.canon-type-should_have .clue-canon-text { color: #e65100; }
+.canon-type-should_have .clue-canon-explanation { color: #ff8f00; }
+
+.canon-type-avoid { background: #ffebee; border: 1px solid #ef9a9a; }
+.canon-type-avoid .clue-canon-label { color: #c62828; }
+.canon-type-avoid .clue-canon-text { color: #b71c1c; }
+.canon-type-avoid .clue-canon-explanation { color: #d32f2f; }
 
 /* LLM Settings */
 .llm-settings { margin: 16px 0; padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; }

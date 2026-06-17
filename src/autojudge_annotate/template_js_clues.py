@@ -71,7 +71,7 @@ function renderClueItem(clue, idx) {
 
   // Show canonicalized nugget if present
   if (clue.canonicalized) {
-    html += '<div class="clue-canonicalized">';
+    html += '<div class="clue-canonicalized canon-type-' + clue.clue_type + '">';
     html += '<div class="clue-canon-label">Canonicalized Nugget:</div>';
     html += '<div class="clue-canon-text">' + escapeHtml(clue.canonicalized.nugget_text) + '</div>';
     if (clue.canonicalized.explanation) {
