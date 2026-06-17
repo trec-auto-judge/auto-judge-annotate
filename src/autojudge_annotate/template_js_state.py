@@ -24,7 +24,9 @@ var state = {
   preSoloEnabledNuggets: null,  // snapshot of enabledNuggets before solo (to restore)
   preSoloNuggetIds: null,  // list of nugget IDs that existed before solo (to detect new nuggets)
   // User-generated nugget grades (from LLM grading)
-  userNuggetGrades: {}  // topicId -> runId -> nuggetId -> {grade, reasoning, confidence}
+  userNuggetGrades: {},  // topicId -> runId -> nuggetId -> {grade, reasoning, confidence}
+  // Heavy highlight for addressed_quote (toggle via clicking "(report)")
+  heavyHighlightNuggetId: null  // nugget_id to show with heavy highlight (null = none)
 };
 
 // DOM refs
@@ -458,7 +460,7 @@ function resetAllAnnotationState() {
     clueCreationMode = false;
   }
 
-  // 3. Reset nugget mode state (weights, enabled nuggets, user grades, collapsed state, solo)
+  // 3. Reset nugget mode state (weights, enabled nuggets, user grades, collapsed state, solo, heavy highlight)
   state.enabledNuggets = {};
   state.nuggetWeights = { must: 1.0, should: 1.0, avoid: -1.0 };
   state.nuggetPanelCollapsed = {};
@@ -466,6 +468,7 @@ function resetAllAnnotationState() {
   state.preSoloEnabledNuggets = null;
   state.preSoloNuggetIds = null;
   state.userNuggetGrades = {};
+  state.heavyHighlightNuggetId = null;
   localStorage.removeItem("autojudge_annotate_grades_" + DATA.dataset);
 
   // 4. Force fresh annotation objects by clearing and restoring selection

@@ -182,7 +182,24 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
         }
       });
     }
-    html += '<span class="nugget-docs" title="' + escapeHtml(tooltip) + '">';
+    // Check if this nugget has an addressed_quote (grades 4-5)
+    var hasQuote = false;
+    if (gradeForVerdict && gradeForVerdict.grade >= 4) {
+      if (gradeForVerdict.addressed_quote) {
+        hasQuote = true;
+      } else if (docGrade && docGrade.paragraphs) {
+        Object.keys(docGrade.paragraphs).forEach(function(pk) {
+          var para = docGrade.paragraphs[pk];
+          if (para.addressed_quote && para.grade >= 4) {
+            hasQuote = true;
+          }
+        });
+      }
+    }
+
+    var clickableClass = hasQuote ? ' nugget-source-clickable' : '';
+    var dataAttr = hasQuote ? ' data-nugget-id="' + escapeHtml(n.nugget_id) + '"' : '';
+    html += '<span class="nugget-docs' + clickableClass + '" title="' + escapeHtml(tooltip) + '"' + dataAttr + '>';
     if (sourceDesc) {
       html += '(' + sourceDesc + ')';
     } else if (gradeForVerdict) {
@@ -349,6 +366,18 @@ function attachNuggetPanelHandlers() {
       }
     };
   });
+
+  // Heavy highlight toggle on clickable source descriptions
+  var clickableSources = document.querySelectorAll('.nugget-source-clickable');
+  clickableSources.forEach(function(el) {
+    el.onclick = function(e) {
+      e.stopPropagation();
+      var nuggetId = el.getAttribute('data-nugget-id');
+      if (nuggetId) {
+        toggleHeavyHighlight(nuggetId);
+      }
+    };
+  });
 }
 
 // Get current document IDs based on mode
@@ -467,5 +496,230 @@ function countDocNuggetCoverage(topicId, docId) {
   });
 
   return { satisfied: satisfied, total: total };
+}
+
+// --- Addressed Quote Highlighting ---
+
+// Get quote highlights for the current view (report or document)
+// Returns: [{quote, nuggetId, nuggetType, isHeavy}]
+function getQuoteHighlights(topicId, runId, docId) {
+  var highlights = [];
+  var bank = getNuggetsForTopic(topicId);
+  var nuggets = bank.nuggets || [];
+
+  nuggets.forEach(function(n) {
+    var nuggetType = n.nugget_type || "must_have";
+    var nuggetId = n.nugget_id;
+    var gradeInfo = null;
+    var quote = null;
+
+    if (docId) {
+      // Document mode - check doc_grades
+      gradeInfo = getDocGrade(topicId, docId, nuggetId);
+      if (gradeInfo && gradeInfo.paragraphs) {
+        // Look for addressed_quote in paragraphs
+        Object.keys(gradeInfo.paragraphs).forEach(function(pk) {
+          var para = gradeInfo.paragraphs[pk];
+          if (para.addressed_quote && para.grade >= 4) {
+            highlights.push({
+              quote: para.addressed_quote,
+              nuggetId: nuggetId,
+              nuggetType: nuggetType,
+              isHeavy: state.heavyHighlightNuggetId === nuggetId
+            });
+          }
+        });
+      }
+    } else if (runId) {
+      // Report mode - check report grades
+      gradeInfo = getReportGrade(topicId, runId, nuggetId);
+      if (gradeInfo && gradeInfo.addressed_quote && gradeInfo.grade >= 4) {
+        highlights.push({
+          quote: gradeInfo.addressed_quote,
+          nuggetId: nuggetId,
+          nuggetType: nuggetType,
+          isHeavy: state.heavyHighlightNuggetId === nuggetId
+        });
+      }
+    }
+  });
+
+  return highlights;
+}
+
+// Strip surrounding quotes from a string (handles \"...\", '...', etc.)
+function stripSurroundingQuotes(s) {
+  if (!s) return s;
+  s = s.trim();
+  // Strip escaped quotes at start/end
+  while (s.length >= 2 &&
+         ((s.startsWith('\\"') && s.endsWith('\\"')) ||
+          (s.startsWith('"') && s.endsWith('"')) ||
+          (s.startsWith("'") && s.endsWith("'")))) {
+    if (s.startsWith('\\"')) {
+      s = s.slice(2, -2);
+    } else {
+      s = s.slice(1, -1);
+    }
+    s = s.trim();
+  }
+  return s;
+}
+
+// Find substring in text (case-insensitive, whitespace-normalized)
+function findQuoteInText(text, quote) {
+  if (!text || !quote) return null;
+
+  // Strip surrounding quotes that LLM may have added
+  quote = stripSurroundingQuotes(quote);
+  if (!quote) return null;
+
+  // Normalize whitespace for comparison
+  var normalizedText = text.replace(/\s+/g, ' ');
+  var normalizedQuote = quote.trim().replace(/\s+/g, ' ');
+
+  // Try exact match first
+  var idx = normalizedText.indexOf(normalizedQuote);
+  if (idx !== -1) {
+    // Map back to original positions
+    var origStart = mapNormalizedToOriginal(text, idx);
+    var origEnd = mapNormalizedToOriginal(text, idx + normalizedQuote.length);
+    return { start: origStart, end: origEnd };
+  }
+
+  // Try case-insensitive match
+  idx = normalizedText.toLowerCase().indexOf(normalizedQuote.toLowerCase());
+  if (idx !== -1) {
+    var origStart = mapNormalizedToOriginal(text, idx);
+    var origEnd = mapNormalizedToOriginal(text, idx + normalizedQuote.length);
+    return { start: origStart, end: origEnd };
+  }
+
+  return null;
+}
+
+// Map position in normalized text (single spaces) back to original text
+function mapNormalizedToOriginal(original, normalizedPos) {
+  var origIdx = 0;
+  var normIdx = 0;
+  var inWhitespace = false;
+
+  while (normIdx < normalizedPos && origIdx < original.length) {
+    var ch = original[origIdx];
+    if (/\s/.test(ch)) {
+      if (!inWhitespace) {
+        normIdx++;
+        inWhitespace = true;
+      }
+      origIdx++;
+    } else {
+      normIdx++;
+      origIdx++;
+      inWhitespace = false;
+    }
+  }
+
+  return origIdx;
+}
+
+// Collect text nodes for quote highlighting
+// Skips citation-marker and remove-span to match SKIP_CLASSES used by user span selection
+// Descends into MARK (user highlights) and quote-highlight to find nested text nodes
+// Returns: {textNodes: [], nodeStarts: [], plainText: string}
+// NOTE: Named differently from collectTextNodes in JS_SPANS_CORE to avoid shadowing
+function collectQuoteTextNodes(container) {
+  var textNodes = [];
+  var nodeStarts = [];
+  var pos = 0;
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      textNodes.push(node);
+      nodeStarts.push(pos);
+      pos += node.textContent.length;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // Skip citation-marker and remove-span (matches SKIP_CLASSES used by user span selection)
+      if (node.classList.contains('citation-marker') || node.classList.contains('remove-span')) {
+        return;
+      }
+      for (var i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
+      }
+    }
+  }
+  walk(container);
+
+  var plainText = textNodes.map(function(n) { return n.textContent; }).join('');
+  return { textNodes: textNodes, nodeStarts: nodeStarts, plainText: plainText };
+}
+
+// Apply quote highlights to a container element
+// Call AFTER applyHighlights (user spans) to layer quote highlights
+function applyQuoteHighlights(container, highlights) {
+  if (!highlights || highlights.length === 0) return;
+
+  // Apply each highlight separately, re-collecting text nodes after each wrap
+  // This handles DOM mutations from previous wraps
+  highlights.forEach(function(h) {
+    // Re-collect text nodes fresh for each highlight (uses quote-specific function)
+    var info = collectQuoteTextNodes(container);
+
+    var pos = findQuoteInText(info.plainText, h.quote);
+    if (pos) {
+      wrapQuoteRange(info.textNodes, info.nodeStarts, {
+        start: pos.start,
+        end: pos.end,
+        nuggetType: h.nuggetType,
+        nuggetId: h.nuggetId,
+        isHeavy: h.isHeavy
+      });
+    }
+  });
+}
+
+// Wrap a quote range with highlight span
+function wrapQuoteRange(textNodes, nodeStarts, highlight) {
+  for (var i = 0; i < textNodes.length; i++) {
+    var nodeStart = nodeStarts[i];
+    var nodeEnd = nodeStart + textNodes[i].textContent.length;
+
+    if (highlight.start >= nodeEnd) continue;
+    if (highlight.end <= nodeStart) break;
+
+    var localStart = Math.max(0, highlight.start - nodeStart);
+    var localEnd = Math.min(textNodes[i].textContent.length, highlight.end - nodeStart);
+
+    var range = document.createRange();
+    range.setStart(textNodes[i], localStart);
+    range.setEnd(textNodes[i], localEnd);
+
+    var span = document.createElement("span");
+    span.className = "quote-highlight quote-highlight-" + highlight.nuggetType;
+    if (highlight.isHeavy) {
+      span.classList.add("quote-highlight-heavy");
+    }
+    span.setAttribute("data-nugget-id", highlight.nuggetId);
+
+    try {
+      range.surroundContents(span);
+    } catch (e) {
+      // Range may cross element boundaries - skip this highlight
+    }
+  }
+}
+
+// Toggle heavy highlight for a nugget
+function toggleHeavyHighlight(nuggetId) {
+  if (state.heavyHighlightNuggetId === nuggetId) {
+    state.heavyHighlightNuggetId = null;
+  } else {
+    state.heavyHighlightNuggetId = nuggetId;
+  }
+  // Re-render to apply highlight changes
+  renderMain();
+}
+
+// Clear heavy highlight (called on navigation)
+function clearHeavyHighlight() {
+  state.heavyHighlightNuggetId = null;
 }
 """

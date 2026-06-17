@@ -98,6 +98,11 @@ function refreshReportHighlights() {
     refreshReportHighlights();
     renderSpans();
   }, SKIP_CLASSES);
+  // Apply quote highlights from addressed_quote in grades
+  if (typeof getQuoteHighlights === "function") {
+    var quoteHighlights = getQuoteHighlights(state.selectedTopic, state.selectedRun, null);
+    applyQuoteHighlights(reportTextEl, quoteHighlights);
+  }
   reportTextEl.addEventListener("mouseup", handleSelection);
 }
 
@@ -113,6 +118,11 @@ function refreshDocHighlights() {
     refreshDocHighlights();
     renderSpans();
   }, SKIP_CLASSES);
+  // Apply quote highlights from addressed_quote in doc grades
+  if (typeof getQuoteHighlights === "function") {
+    var quoteHighlights = getQuoteHighlights(state.selectedTopic, null, state.selectedDoc);
+    applyQuoteHighlights(reportTextEl, quoteHighlights);
+  }
   reportTextEl.addEventListener("mouseup", handleDocSelection);
 }
 

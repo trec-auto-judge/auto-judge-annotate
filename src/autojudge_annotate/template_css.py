@@ -451,4 +451,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .llm-key-clear { background: #dc3545; }
 .llm-key-clear:hover { background: #c82333; }
 .llm-model-info { font-size: 11px; color: #6c757d; margin-top: 8px; }
+
+/* Addressed quote highlights (from nugget grades) */
+/* Light highlights - subtle background indicating quote location */
+.quote-highlight { border-radius: 2px; padding: 0 1px; }
+.quote-highlight-must_have { background: rgba(40, 167, 69, 0.15); }
+.quote-highlight-should_have { background: rgba(255, 193, 7, 0.2); }
+.quote-highlight-avoid { background: rgba(220, 53, 69, 0.15); }
+
+/* Heavy highlights - stronger styling when toggled via click */
+.quote-highlight-heavy { font-weight: 500; }
+.quote-highlight-heavy.quote-highlight-must_have { background: rgba(40, 167, 69, 0.4); box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.3); }
+.quote-highlight-heavy.quote-highlight-should_have { background: rgba(255, 193, 7, 0.5); box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3); }
+.quote-highlight-heavy.quote-highlight-avoid { background: rgba(220, 53, 69, 0.4); box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3); }
+
+/* Nugget source clickable indicator */
+.nugget-source-clickable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+.nugget-source-clickable:hover { text-decoration-style: solid; }
 """

@@ -161,6 +161,7 @@ def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str
             "grade": g.get("grade", 0),
             "reasoning": g.get("reasoning", ""),
             "confidence": g.get("confidence", 0.0),
+            "addressed_quote": g.get("addressed_quote"),
         }
 
     return result
@@ -220,6 +221,7 @@ def _serialize_doc_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, d
                         "reasoning": g.get("reasoning", ""),
                         "confidence": g.get("confidence", 0.0),
                         "passage": g.get("passage", ""),
+                        "addressed_quote": g.get("addressed_quote"),
                     }
                     if grade > max_grade:
                         max_grade = grade

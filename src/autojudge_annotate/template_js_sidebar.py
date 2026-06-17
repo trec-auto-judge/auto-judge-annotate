@@ -112,6 +112,7 @@ function renderSidebar() {
       state.selectedDoc = null;
       state.selectedSentenceIdx = null;
       state.selectedCitationIdx = null;
+      if (typeof clearHeavyHighlight === "function") clearHeavyHighlight();
       renderSidebar();
       renderMain();
     });
@@ -180,6 +181,7 @@ function renderSidebar() {
         state.selectedCitationIdx = null;
         // Auto-expand when selecting
         state.expandedRuns[runExpandKey(tid, rid)] = true;
+        if (typeof clearHeavyHighlight === "function") clearHeavyHighlight();
         renderSidebar();
         renderMain();
       });
@@ -231,6 +233,7 @@ function renderSidebar() {
                 state.selectedDoc = null;
                 state.selectedSentenceIdx = idx;
                 state.selectedCitationIdx = 0;
+                if (typeof clearHeavyHighlight === "function") clearHeavyHighlight();
                 renderSidebar();
                 renderMain();
               });
@@ -282,6 +285,7 @@ function renderSidebar() {
               state.selectedDoc = did;
               state.selectedSentenceIdx = null;
               state.selectedCitationIdx = null;
+              if (typeof clearHeavyHighlight === "function") clearHeavyHighlight();
               renderSidebar();
               renderMain();
             });
