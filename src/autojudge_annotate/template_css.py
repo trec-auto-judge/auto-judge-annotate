@@ -232,12 +232,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .nugget-panel-toggle { display: inline-block; transition: transform 0.2s; font-size: 10px; transform: rotate(90deg); }
 .nugget-panel.collapsed .nugget-panel-toggle { transform: rotate(0deg); }
 .nugget-panel.collapsed .nugget-panel-content { display: none; }
+.nugget-panel-title { font-weight: 600; }
+.nugget-panel-spacer { flex: 1; }
 .nugget-panel-content { }
-.nugget-panel-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-left: 14px; }
-.quote-all-btn { padding: 3px 10px; background: #6c757d; color: #fff; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.quote-all-btn { padding: 2px 8px; background: #6c757d; color: #fff; border: none; border-radius: 3px; font-size: 10px; cursor: pointer; }
 .quote-all-btn:hover { background: #5a6268; }
 .quote-all-btn:disabled { background: #adb5bd; cursor: not-allowed; }
-.quote-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 18px; background: #e3f2fd; color: #1976d2; border-radius: 9px; font-size: 10px; font-weight: 600; }
+.quote-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 16px; background: #e3f2fd; color: #1976d2; border-radius: 8px; font-size: 9px; font-weight: 600; margin-left: 4px; }
+.quote-progress-inline:empty { display: none; }
 .quote-progress-inline.quote-active { background: #e3f2fd; color: #1976d2; }
 .quote-progress-inline.quote-done { background: #e8f5e9; color: #2e7d32; }
 
@@ -258,14 +260,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .cat-avoid .nugget-category-name,
 .cat-claims .nugget-category-name { color: #2c3e50; }
 
-.nugget-list { display: flex; flex-direction: column; gap: 2px; }
-.nugget-item { display: flex; align-items: flex-start; gap: 8px; padding: 2px 4px; font-size: 12px; line-height: 1.4; }
-.nugget-item.nugget-satisfied { background: #f8fff8; }
-.nugget-item.nugget-partial { background: #fffdf5; }
-.nugget-item.nugget-not-satisfied { background: #fff8f8; }
-.nugget-item.nugget-unknown { background: #f8f9fa; }
-/* User-created nuggets: subtle left border instead of background override */
-/* This way verdict-based backgrounds (green/yellow/red) are preserved */
+.nugget-list { display: flex; flex-direction: column; gap: 0; }
+.nugget-item { display: flex; align-items: flex-start; gap: 8px; padding: 4px 4px; font-size: 12px; line-height: 1.4; border-bottom: 1px solid #e9ecef; }
+.nugget-item:last-child { border-bottom: none; }
+/* No background colors for verdict states - avoids confusion with quote highlight colors */
+/* Verdict is indicated by the icon color only */
+/* User-created nuggets: subtle left border indicator */
 .nugget-item.user-nugget-item { border-left: 3px solid #3498db; padding-left: 6px; }
 
 .nugget-verdict { font-size: 12px; flex-shrink: 0; min-width: 16px; }

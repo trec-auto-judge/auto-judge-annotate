@@ -327,11 +327,10 @@ function renderNuggetPanel(topicId, currentDocIds) {
   // Build panel HTML
   var panelCollapsed = state.nuggetPanelCollapsed["panel"] === true;
   var html = '<div class="nugget-panel' + (panelCollapsed ? ' collapsed' : '') + '">';
-  html += '<h3 class="nugget-panel-header" data-panel="nuggets">';
+  html += '<div class="nugget-panel-header" data-panel="nuggets">';
   html += '<span class="nugget-panel-toggle">&#9656;</span>';
-  html += 'Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')';
-  html += '</h3>';
-  html += '<div class="nugget-panel-actions">';
+  html += '<span class="nugget-panel-title">Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')</span>';
+  html += '<span class="nugget-panel-spacer"></span>';
   html += '<button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button>';
   html += '<span id="quote-extraction-progress" class="quote-progress-inline"></span>';
   html += '</div>';
