@@ -347,10 +347,10 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
       grade = 0;
     }
 
-    // For avoid nuggets, invert the grade (high grade = bad = low score)
-    if (isAvoidNugget) {
-      grade = 5 - grade;
-    }
+    // NOTE: We do NOT invert grades for avoid nuggets here.
+    // The grade reflects PRESENCE (is this topic addressed?), not goodness.
+    // The negative weight for ranking avoid nuggets is handled separately.
+    // Motto: "Nuggets get a check mark whenever they are present."
 
     return {
       grade: grade,
