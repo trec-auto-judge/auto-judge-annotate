@@ -238,17 +238,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .quote-all-btn { padding: 2px 8px; background: #6c757d; color: #fff; border: none; border-radius: 3px; font-size: 10px; cursor: pointer; }
 .quote-all-btn:hover { background: #5a6268; }
 .quote-all-btn:disabled { background: #adb5bd; cursor: not-allowed; }
-.quote-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 16px; background: #e3f2fd; color: #1976d2; border-radius: 8px; font-size: 9px; font-weight: 600; margin-left: 4px; }
-.quote-progress-inline:empty { display: none; }
+.quote-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 16px; background: #e3f2fd; color: #1976d2; border-radius: 8px; font-size: 9px; font-weight: 600; }
 .quote-progress-inline.quote-active { background: #e3f2fd; color: #1976d2; }
 .quote-progress-inline.quote-done { background: #e8f5e9; color: #2e7d32; }
 
-/* Grade Docs button */
-.grade-docs-btn { padding: 2px 8px; background: #17a2b8; color: #fff; border: none; border-radius: 3px; font-size: 10px; cursor: pointer; margin-right: 4px; }
-.grade-docs-btn:hover { background: #138496; }
+/* Grade Docs button - same color as Quote button */
+.grade-docs-btn { padding: 2px 8px; background: #6c757d; color: #fff; border: none; border-radius: 3px; font-size: 10px; cursor: pointer; margin-right: 4px; }
+.grade-docs-btn:hover { background: #5a6268; }
 .grade-docs-btn:disabled { background: #adb5bd; cursor: not-allowed; }
 .grade-docs-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 16px; background: #e3f2fd; color: #1976d2; border-radius: 8px; font-size: 9px; font-weight: 600; margin-right: 4px; }
-.grade-docs-progress-inline:empty { display: none; }
 .grade-docs-progress-inline.grade-docs-active { background: #e3f2fd; color: #1976d2; }
 .grade-docs-progress-inline.grade-docs-done { background: #e8f5e9; color: #2e7d32; }
 
@@ -309,14 +307,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .user-nugget { border-left: 3px solid #3498db; }
 .nugget-text-span { font-size: 13px; line-height: 1.4; color: #555; flex: 1; }
 
-/* Grade button for ungraded nuggets */
+/* Grade button */
 .grade-btn { padding: 2px 8px; font-size: 10px; background: #6c757d; color: #fff; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-right: 4px; }
 .grade-btn:hover { background: #5a6268; }
-
-/* Re-grade button (after grading complete) */
-.regrade-nugget-btn { padding: 2px 8px; font-size: 10px; background: #e9ecef; color: #495057; border: 1px solid #ced4da; border-radius: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; margin-right: 8px; }
-.regrade-nugget-btn:hover { background: #dee2e6; }
-.regrade-nugget-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Solo button - matches checkbox accent color */
 .solo-btn { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #fff; color: #6c757d; border: 1px solid #ced4da; border-radius: 50%; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; flex-shrink: 0; margin-right: 4px; padding: 0; }

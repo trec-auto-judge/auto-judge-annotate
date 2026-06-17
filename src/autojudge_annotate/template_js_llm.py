@@ -264,23 +264,32 @@ var gradingState = {
   errors: 0
 };
 
-// Update grading progress display
+// Update grading progress display - swaps between button and progress indicator
 function updateGradingProgress(nuggetId) {
-  var progressEl = document.getElementById("grading-progress-" + nuggetId);
-  if (progressEl) {
-    if (gradingState.total === 0) {
-      progressEl.textContent = "0/?";
-    } else if (gradingState.completed >= gradingState.total) {
-      progressEl.textContent = "Done!";
-      progressEl.className = "grading-progress-inline grading-done";
+  var container = document.getElementById("grading-container-" + nuggetId);
+  if (!container) return;
+
+  if (gradingState.activeNuggetId !== nuggetId) {
+    // Not grading this nugget - this shouldn't happen during active grading
+    // The button will be restored when renderMain() is called after grading completes
+    return;
+  }
+
+  // Show progress indicator
+  var progressText = "0/?";
+  var progressClass = "grading-active";
+  if (gradingState.total > 0) {
+    if (gradingState.completed >= gradingState.total) {
+      progressText = "Done!";
+      progressClass = "grading-done";
     } else {
-      progressEl.textContent = gradingState.completed + "/" + gradingState.total;
+      progressText = gradingState.completed + "/" + gradingState.total;
       if (gradingState.errors > 0) {
-        progressEl.textContent += " (" + gradingState.errors + " err)";
+        progressText += " (" + gradingState.errors + " err)";
       }
-      progressEl.className = "grading-progress-inline grading-active";
     }
   }
+  container.innerHTML = '<span class="grading-progress-inline ' + progressClass + '">' + progressText + '</span>';
 }
 
 // Grade a nugget against a single report
@@ -360,18 +369,10 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
 
     // For high grades (>= 4), extract the addressed quote
     if (grade >= 4) {
-      // Increment total to account for the quote extraction prompt
-      gradingState.total++;
-      updateGradingProgress(gradingState.activeNuggetId);
-
       var quote = await extractAddressedQuote(nuggetText, passage);
       if (quote) {
         gradeData.addressed_quote = quote;
       }
-
-      // Count quote extraction as completed
-      gradingState.completed++;
-      updateGradingProgress(gradingState.activeNuggetId);
     }
 
     return gradeData;
@@ -478,6 +479,8 @@ async function gradeUserNuggetAcrossReports(topicId, nuggetId, nuggetText, isAvo
   gradingState.completed = 0;
   gradingState.total = runs.length;
   gradingState.errors = 0;
+
+  // Swap button for progress indicator immediately
   updateGradingProgress(nuggetId);
 
   // Queue all grading tasks
@@ -492,10 +495,8 @@ async function gradeUserNuggetAcrossReports(topicId, nuggetId, nuggetText, isAvo
       }
 
       gradingState.completed++;
-      updateGradingProgress(nuggetId);
-
-      // Refresh main panel to show updated verdicts
       renderMain();
+      updateGradingProgress(nuggetId); // Must be after renderMain() to swap button back to progress
 
       return result;
     });
@@ -534,21 +535,29 @@ var quoteExtractionState = {
 };
 
 function updateQuoteExtractionProgress() {
-  var progressEl = document.getElementById("quote-extraction-progress");
-  if (progressEl) {
-    if (quoteExtractionState.total === 0) {
-      progressEl.textContent = "";
-      progressEl.className = "quote-progress-inline";
-    } else if (quoteExtractionState.completed >= quoteExtractionState.total) {
-      progressEl.textContent = "Done!";
-      progressEl.className = "quote-progress-inline quote-done";
-    } else {
-      progressEl.textContent = quoteExtractionState.completed + "/" + quoteExtractionState.total;
-      if (quoteExtractionState.errors > 0) {
-        progressEl.textContent += " (" + quoteExtractionState.errors + " err)";
-      }
-      progressEl.className = "quote-progress-inline quote-active";
+  var container = document.getElementById("quote-container");
+  if (!container) return;
+
+  if (!quoteExtractionState.active) {
+    // Not active: show button
+    container.innerHTML = '<button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button>';
+    // Re-attach click handler
+    var btn = document.getElementById("quote-all-btn");
+    if (btn) {
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        if (typeof extractQuotesForActiveNuggets === "function" && !isQuoteExtractionActive()) {
+          extractQuotesForActiveNuggets();
+        }
+      };
     }
+  } else {
+    // Active: show progress
+    var progressText = quoteExtractionState.completed + "/" + quoteExtractionState.total;
+    if (quoteExtractionState.errors > 0) {
+      progressText += " (" + quoteExtractionState.errors + " err)";
+    }
+    container.innerHTML = '<span class="quote-progress-inline quote-active">' + progressText + '</span>';
   }
 }
 
@@ -707,10 +716,8 @@ async function extractQuotesForActiveNuggets() {
       }
 
       quoteExtractionState.completed++;
-      updateQuoteExtractionProgress();
-
-      // Refresh to show new highlights
       renderMain();
+      updateQuoteExtractionProgress(); // Must be after renderMain() to swap button back to progress
 
       return quote;
     });
@@ -719,6 +726,7 @@ async function extractQuotesForActiveNuggets() {
   await Promise.all(promises);
 
   quoteExtractionState.active = false;
+  updateQuoteExtractionProgress(); // Restore button
 }
 
 // Check if quote extraction is currently running
@@ -736,21 +744,29 @@ var gradeDocsState = {
 };
 
 function updateGradeDocsProgress() {
-  var progressEl = document.getElementById("grade-docs-progress");
-  if (progressEl) {
-    if (gradeDocsState.total === 0) {
-      progressEl.textContent = "";
-      progressEl.className = "grade-docs-progress-inline";
-    } else if (gradeDocsState.completed >= gradeDocsState.total) {
-      progressEl.textContent = "Done!";
-      progressEl.className = "grade-docs-progress-inline grade-docs-done";
-    } else {
-      progressEl.textContent = gradeDocsState.completed + "/" + gradeDocsState.total;
-      if (gradeDocsState.errors > 0) {
-        progressEl.textContent += " (" + gradeDocsState.errors + " err)";
-      }
-      progressEl.className = "grade-docs-progress-inline grade-docs-active";
+  var container = document.getElementById("grade-docs-container");
+  if (!container) return;
+
+  if (!gradeDocsState.active) {
+    // Not active: show button
+    container.innerHTML = '<button id="grade-docs-btn" class="grade-docs-btn" title="Grade user nuggets against cited documents">Grade Docs</button>';
+    // Re-attach click handler
+    var btn = document.getElementById("grade-docs-btn");
+    if (btn) {
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        if (typeof gradeDocsForReport === "function" && !isGradeDocsActive()) {
+          gradeDocsForReport();
+        }
+      };
     }
+  } else {
+    // Active: show progress
+    var progressText = gradeDocsState.completed + "/" + gradeDocsState.total;
+    if (gradeDocsState.errors > 0) {
+      progressText += " (" + gradeDocsState.errors + " err)";
+    }
+    container.innerHTML = '<span class="grade-docs-progress-inline grade-docs-active">' + progressText + '</span>';
   }
 }
 
@@ -834,16 +850,10 @@ async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNu
 
     // For high grades (>= 4), extract the addressed quote
     if (grade >= 4) {
-      gradeDocsState.total++;
-      updateGradeDocsProgress();
-
       var quote = await extractAddressedQuote(nuggetText, passage);
       if (quote) {
         gradeData.addressed_quote = quote;
       }
-
-      gradeDocsState.completed++;
-      updateGradeDocsProgress();
     }
 
     return gradeData;
@@ -949,8 +959,8 @@ async function gradeDocsForReport() {
       }
 
       gradeDocsState.completed++;
-      updateGradeDocsProgress();
       renderMain();
+      updateGradeDocsProgress(); // Must be after renderMain() to swap button back to progress
 
       return result;
     });
@@ -968,8 +978,8 @@ async function gradeDocsForReport() {
       }
 
       gradeDocsState.completed++;
-      updateGradeDocsProgress();
       renderMain();
+      updateGradeDocsProgress(); // Must be after renderMain() to swap button back to progress
 
       return result;
     });
@@ -978,6 +988,7 @@ async function gradeDocsForReport() {
   await Promise.all(reportPromises.concat(docPromises));
 
   gradeDocsState.active = false;
+  updateGradeDocsProgress(); // Restore button
 
   // Update sidebar to reflect new coverage counts
   if (typeof renderSidebar === "function") {

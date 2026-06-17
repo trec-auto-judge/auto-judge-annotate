@@ -344,11 +344,9 @@ function renderNuggetPanel(topicId, currentDocIds) {
   html += '<span class="nugget-panel-title">Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')</span>';
   html += '<span class="nugget-panel-spacer"></span>';
   if (isReportMode) {
-    html += '<button id="grade-docs-btn" class="grade-docs-btn" title="Grade user nuggets against cited documents">Grade Docs</button>';
-    html += '<span id="grade-docs-progress" class="grade-docs-progress-inline"></span>';
+    html += '<span id="grade-docs-container"><button id="grade-docs-btn" class="grade-docs-btn" title="Grade user nuggets against cited documents">Grade Docs</button></span>';
   }
-  html += '<button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button>';
-  html += '<span id="quote-extraction-progress" class="quote-progress-inline"></span>';
+  html += '<span id="quote-container"><button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button></span>';
   html += '</div>';
   html += '<div class="nugget-panel-content">';
 

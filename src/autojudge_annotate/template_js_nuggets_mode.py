@@ -294,45 +294,32 @@ function renderCriteriaPanel(topicId) {
 }
 
 // Render a single user nugget item with Grade button and coverage stats
-// Layout:
-//   Not graded: [?/Grade btn] [label] [coverage (empty)]
-//   Grading:    [progress]    [label] [coverage (building)]
-//   Graded:     [checkbox]    [label] [Re-grade] [coverage]
+// Layout: [solo?] [checkbox?] [label] [Grade btn container] [coverage]
+// During grading, the button container is swapped for a progress indicator
 function renderUserNuggetItem(topicId, n, isAvoidNugget) {
   var hasGrades = hasUserNuggetGrades(topicId, n.nugget_id);
-  var isGrading = isNuggetGrading(n.nugget_id);
   var stats = countNuggetCoverageStats(topicId, n.nugget_id, null);
   var coverageStr = formatNuggetCoverageStats(stats);
 
   var html = '<div class="nugget-item criteria-nugget-item user-nugget' + (isAvoidNugget ? ' nugget-avoid' : '') + '">';
 
-  if (isGrading) {
-    // During grading: show progress indicator (read current progress from gradingState)
-    var progressText = "0/?";
-    if (gradingState.total > 0) {
-      progressText = gradingState.completed + "/" + gradingState.total;
-      if (gradingState.errors > 0) {
-        progressText += " (" + gradingState.errors + " err)";
-      }
-    }
-    html += '<span class="grading-progress-inline grading-active" id="grading-progress-' + n.nugget_id + '">' + progressText + '</span>';
-    // Nugget text (no checkbox interaction during grading)
-    html += '<span class="nugget-text-span" title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</span>';
-  } else if (hasGrades) {
-    // After grading: show checkbox like other nuggets (for ranking)
+  if (hasGrades) {
+    // After grading: show solo button and checkbox for ranking
     var enabled = isNuggetEffectivelyEnabled(n.nugget_id);
     var checked = enabled ? "checked" : "";
     var isSoloed = state.soloNuggetId === n.nugget_id;
     html += '<button class="solo-btn' + (isSoloed ? ' soloed' : '') + '" data-nugget-id="' + n.nugget_id + '" title="Solo this nugget">&middot;</button>';
     html += '<input type="checkbox" id="nug_' + n.nugget_id + '" data-nugget-id="' + n.nugget_id + '" ' + checked + '>';
     html += '<label for="nug_' + n.nugget_id + '" title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</label>';
-    // Re-grade button (before coverage)
-    html += '<button class="regrade-nugget-btn" data-nugget-id="' + n.nugget_id + '" data-nugget-text="' + escapeHtml(n.text) + '" data-is-avoid="' + isAvoidNugget + '">Re-grade</button>';
   } else {
-    // Not yet graded: show Grade button
-    html += '<button class="grade-btn" data-nugget-id="' + n.nugget_id + '" data-nugget-text="' + escapeHtml(n.text) + '" data-is-avoid="' + isAvoidNugget + '" title="Click to grade this nugget">Grade</button>';
+    // Not yet graded: just show text
     html += '<span class="nugget-text-span" title="' + escapeHtml(n.explanation || '') + '">' + escapeHtml(n.text) + '</span>';
   }
+
+  // Grade button container - at the right, just before coverage stats
+  html += '<span id="grading-container-' + n.nugget_id + '">';
+  html += '<button class="grade-btn" data-nugget-id="' + n.nugget_id + '" data-nugget-text="' + escapeHtml(n.text) + '" data-is-avoid="' + isAvoidNugget + '" title="Grade this nugget across all reports">Grade</button>';
+  html += '</span>';
 
   // Coverage stats (always show, aligns as column on right)
   html += '<span class="nugget-coverage">' + (coverageStr ? escapeHtml(coverageStr) : '') + '</span>';
@@ -459,7 +446,7 @@ function attachCriteriaHandlers() {
     };
   });
 
-  // Grade button for ungraded nuggets
+  // Grade button - grades/re-grades nugget across all reports
   var gradeBtns = document.querySelectorAll(".grade-btn");
   gradeBtns.forEach(function(btn) {
     btn.onclick = async function() {
@@ -467,26 +454,7 @@ function attachCriteriaHandlers() {
       var nuggetText = btn.getAttribute("data-nugget-text");
       var isAvoid = btn.getAttribute("data-is-avoid") === "true";
 
-      // Start grading - UI will re-render with progress indicator
-      try {
-        await gradeUserNuggetAcrossReports(state.selectedTopic, nuggetId, nuggetText, isAvoid);
-      } finally {
-        renderMain();
-      }
-    };
-  });
-
-  // Re-grade button (for already graded nuggets)
-  var regradeBtns = document.querySelectorAll(".regrade-nugget-btn");
-  regradeBtns.forEach(function(btn) {
-    btn.onclick = async function() {
-      var nuggetId = btn.getAttribute("data-nugget-id");
-      var nuggetText = btn.getAttribute("data-nugget-text");
-      var isAvoid = btn.getAttribute("data-is-avoid") === "true";
-
-      btn.disabled = true;
-      btn.textContent = "...";
-
+      // gradeUserNuggetAcrossReports swaps button for progress during grading
       try {
         await gradeUserNuggetAcrossReports(state.selectedTopic, nuggetId, nuggetText, isAvoid);
       } finally {
