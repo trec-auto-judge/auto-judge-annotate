@@ -361,10 +361,18 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
 
     // For high grades (>= 4), extract the addressed quote
     if (grade >= 4) {
+      // Increment total to account for the quote extraction prompt
+      gradingState.total++;
+      updateGradingProgress(gradingState.activeNuggetId);
+
       var quote = await extractAddressedQuote(nuggetText, passage);
       if (quote) {
         gradeData.addressed_quote = quote;
       }
+
+      // Count quote extraction as completed
+      gradingState.completed++;
+      updateGradingProgress(gradingState.activeNuggetId);
     }
 
     return gradeData;

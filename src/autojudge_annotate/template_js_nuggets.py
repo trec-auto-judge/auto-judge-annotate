@@ -210,7 +210,8 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
     html += '<span class="nugget-docs' + clickableClass + '" title="' + escapeHtml(tooltip) + '"' + dataAttr + '>';
     if (sourceDesc) {
       html += '(' + sourceDesc + ')';
-    } else if (gradeForVerdict) {
+    } else if (gradeForVerdict && gradeForVerdict.grade > 0) {
+      // Only show grade if > 0 (present); grade 0 means not present, show nothing
       html += '(grade: ' + gradeForVerdict.grade + ')';
     }
     html += '</span>';
@@ -524,6 +525,12 @@ function getQuoteHighlights(topicId, runId, docId) {
   allNuggets.forEach(function(n) {
     var nuggetType = n.nugget_type || "must_have";
     var nuggetId = n.nugget_id;
+
+    // Only show highlights for enabled/selected nuggets
+    if (typeof isNuggetEffectivelyEnabled === "function" && !isNuggetEffectivelyEnabled(nuggetId)) {
+      return;
+    }
+
     var gradeInfo = null;
 
     if (docId) {
