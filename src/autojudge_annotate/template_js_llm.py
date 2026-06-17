@@ -295,7 +295,6 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
   }
 
   if (!passage) {
-    console.warn("No passage text for report:", runId);
     return null;
   }
 
@@ -438,7 +437,6 @@ async function extractAddressedQuote(question, passage) {
     var normQuote = quote.replace(/\s+/g, " ").toLowerCase();
     if (!normPassage.includes(normQuote)) {
       console.warn("Extracted quote not found in passage, discarding:", quote.substring(0, 80) + "...");
-      console.warn("Quote length:", quote.length, "Passage length:", passage.length);
       return null;
     }
 
@@ -507,7 +505,6 @@ async function gradeUserNuggetAcrossReports(topicId, nuggetId, nuggetText, isAvo
   await Promise.all(promises);
 
   gradingState.activeNuggetId = null;
-  console.log("Grading complete for nugget:", nuggetId, "Completed:", gradingState.completed, "Errors:", gradingState.errors);
 }
 
 // Check if a nugget is currently being graded
@@ -657,12 +654,8 @@ async function extractQuotesForActiveNuggets() {
   });
 
   if (toProcess.length === 0) {
-    console.log("No nuggets need quote extraction");
-    console.log("All nuggets checked:", allNuggets.length);
     return;
   }
-
-  console.log("Quote extraction: processing", toProcess.length, "nuggets");
 
   // Initialize progress
   quoteExtractionState.active = true;
@@ -677,7 +670,6 @@ async function extractQuotesForActiveNuggets() {
       var quote = await extractAddressedQuote(item.nuggetText, passage);
 
       if (quote) {
-        console.log("Quote extracted for", item.nugget.nugget_id, ":", quote.substring(0, 50) + "...");
 
         if (isDocMode && item.paragraphKey !== null) {
           // Document mode with paragraph-level grades - store quote at paragraph level
@@ -711,7 +703,6 @@ async function extractQuotesForActiveNuggets() {
           }
         }
       } else {
-        console.log("Quote extraction failed for", item.nugget.nugget_id);
         quoteExtractionState.errors++;
       }
 
@@ -728,7 +719,6 @@ async function extractQuotesForActiveNuggets() {
   await Promise.all(promises);
 
   quoteExtractionState.active = false;
-  console.log("Quote extraction complete. Completed:", quoteExtractionState.completed, "Errors:", quoteExtractionState.errors);
 }
 
 // Check if quote extraction is currently running
@@ -844,16 +834,12 @@ async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNu
 
     // For high grades (>= 4), extract the addressed quote
     if (grade >= 4) {
-      console.log("Doc grade >= 4, extracting quote for nugget:", nuggetText.substring(0, 50) + "...");
       gradeDocsState.total++;
       updateGradeDocsProgress();
 
       var quote = await extractAddressedQuote(nuggetText, passage);
       if (quote) {
         gradeData.addressed_quote = quote;
-        console.log("Quote extracted successfully:", quote.substring(0, 50) + "...");
-      } else {
-        console.warn("Quote extraction failed or returned null for high-grade doc nugget");
       }
 
       gradeDocsState.completed++;
@@ -885,7 +871,6 @@ async function gradeDocsForReport() {
   }
 
   var docIds = (typeof getReportDocIds === "function") ? getReportDocIds(report) : [];
-  console.log("Grade Docs: report", runId, "has", docIds.length, "cited documents:", docIds);
 
   // Get active user nuggets (only user-created nuggets, not pre-loaded ones)
   var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
@@ -945,8 +930,6 @@ async function gradeDocsForReport() {
     return;
   }
 
-  console.log("Grade Docs: processing", toProcessReport.length, "report grades +", toProcessDocs.length, "doc grades for", enabledNuggets.length, "nuggets");
-
   // Initialize progress
   gradeDocsState.active = true;
   gradeDocsState.completed = 0;
@@ -995,7 +978,6 @@ async function gradeDocsForReport() {
   await Promise.all(reportPromises.concat(docPromises));
 
   gradeDocsState.active = false;
-  console.log("Grade Docs complete. Completed:", gradeDocsState.completed, "Errors:", gradeDocsState.errors);
 
   // Update sidebar to reflect new coverage counts
   if (typeof renderSidebar === "function") {
