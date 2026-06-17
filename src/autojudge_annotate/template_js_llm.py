@@ -523,4 +523,193 @@ function hasUserNuggetGrades(topicId, nuggetId) {
   }
   return false;
 }
+
+// --- Quote Extraction for Active Nuggets ---
+
+var quoteExtractionState = {
+  active: false,
+  completed: 0,
+  total: 0,
+  errors: 0
+};
+
+function updateQuoteExtractionProgress() {
+  var progressEl = document.getElementById("quote-extraction-progress");
+  if (progressEl) {
+    if (quoteExtractionState.total === 0) {
+      progressEl.textContent = "";
+      progressEl.className = "quote-progress-inline";
+    } else if (quoteExtractionState.completed >= quoteExtractionState.total) {
+      progressEl.textContent = "Done!";
+      progressEl.className = "quote-progress-inline quote-done";
+    } else {
+      progressEl.textContent = quoteExtractionState.completed + "/" + quoteExtractionState.total;
+      if (quoteExtractionState.errors > 0) {
+        progressEl.textContent += " (" + quoteExtractionState.errors + " err)";
+      }
+      progressEl.className = "quote-progress-inline quote-active";
+    }
+  }
+}
+
+// Extract quotes for all active nuggets that have grades but no addressed_quote
+async function extractQuotesForActiveNuggets() {
+  var topicId = state.selectedTopic;
+  var runId = state.selectedRun;
+  var docId = state.selectedDoc;
+
+  if (!topicId) return;
+
+  // Determine passage source
+  var passage = null;
+  var isDocMode = !!docId;
+
+  if (isDocMode) {
+    // Document mode - get document text
+    var doc = docIndex[topicId] && docIndex[topicId][docId];
+    if (doc) {
+      passage = doc.text || doc.body || "";
+    }
+  } else if (runId) {
+    // Report mode - get report text
+    var report = reportIndex[topicId] && reportIndex[topicId][runId];
+    if (report) {
+      passage = report.response_text || "";
+      if (!passage && report.sentences) {
+        passage = report.sentences.map(function(s) { return s.text; }).join(" ");
+      }
+    }
+  }
+
+  if (!passage) {
+    console.warn("No passage text available for quote extraction");
+    return;
+  }
+
+  // Get all active nuggets (pre-loaded + user-created)
+  var bank = getNuggetsForTopic(topicId);
+  var nuggets = bank.nuggets || [];
+  var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
+    ? getCanonicalizedNuggetsForTopic(topicId)
+    : [];
+  var allNuggets = nuggets.concat(userNuggets);
+
+  // Filter to active nuggets that have grades but no quote
+  var toProcess = [];
+  allNuggets.forEach(function(n) {
+    // Skip disabled nuggets
+    if (typeof isNuggetEffectivelyEnabled === "function" && !isNuggetEffectivelyEnabled(n.nugget_id)) {
+      return;
+    }
+
+    // Get grade for this nugget
+    var gradeInfo = null;
+    if (isDocMode) {
+      gradeInfo = getDocGrade(topicId, docId, n.nugget_id);
+      // For documents, check if any paragraph has grade >= 1 but no quote
+      if (gradeInfo && gradeInfo.paragraphs) {
+        var needsQuote = false;
+        var bestPara = null;
+        var bestGrade = 0;
+        Object.keys(gradeInfo.paragraphs).forEach(function(pk) {
+          var para = gradeInfo.paragraphs[pk];
+          if (para.grade >= 1 && !para.addressed_quote) {
+            needsQuote = true;
+            // Track the highest-graded paragraph without a quote
+            if (para.grade > bestGrade) {
+              bestGrade = para.grade;
+              bestPara = pk;
+            }
+          }
+        });
+        if (needsQuote && bestPara !== null) {
+          toProcess.push({
+            nugget: n,
+            gradeInfo: gradeInfo,
+            paragraphKey: bestPara,
+            nuggetText: n.text || n.question || ""
+          });
+        }
+      }
+    } else if (runId) {
+      gradeInfo = getReportGrade(topicId, runId, n.nugget_id);
+      // For reports, check top-level grade and quote
+      if (gradeInfo && gradeInfo.grade >= 1 && !gradeInfo.addressed_quote) {
+        toProcess.push({
+          nugget: n,
+          gradeInfo: gradeInfo,
+          paragraphKey: null,
+          nuggetText: n.text || n.question || ""
+        });
+      }
+    }
+  });
+
+  if (toProcess.length === 0) {
+    console.log("No nuggets need quote extraction");
+    console.log("All nuggets checked:", allNuggets.length);
+    return;
+  }
+
+  console.log("Quote extraction: processing", toProcess.length, "nuggets");
+
+  // Initialize progress
+  quoteExtractionState.active = true;
+  quoteExtractionState.completed = 0;
+  quoteExtractionState.total = toProcess.length;
+  quoteExtractionState.errors = 0;
+  updateQuoteExtractionProgress();
+
+  // Process each nugget
+  var promises = toProcess.map(function(item) {
+    return queueLlmTask(async function() {
+      var quote = await extractAddressedQuote(item.nuggetText, passage);
+
+      if (quote) {
+        console.log("Quote extracted for", item.nugget.nugget_id, ":", quote.substring(0, 50) + "...");
+
+        if (isDocMode && item.paragraphKey !== null) {
+          // Document mode - store quote at paragraph level
+          item.gradeInfo.paragraphs[item.paragraphKey].addressed_quote = quote;
+          // Note: doc grades are stored in DATA.doc_grades, modification persists in memory
+        } else {
+          // Report mode - store quote at top level
+          item.gradeInfo.addressed_quote = quote;
+
+          // Also store in userNuggetGrades (takes precedence over DATA.nugget_grades)
+          if (runId) {
+            var updatedGrade = {
+              grade: item.gradeInfo.grade,
+              reasoning: item.gradeInfo.reasoning || "",
+              confidence: item.gradeInfo.confidence || 0.5,
+              addressed_quote: quote
+            };
+            storeUserGrade(topicId, runId, item.nugget.nugget_id, updatedGrade);
+          }
+        }
+      } else {
+        console.log("Quote extraction failed for", item.nugget.nugget_id);
+        quoteExtractionState.errors++;
+      }
+
+      quoteExtractionState.completed++;
+      updateQuoteExtractionProgress();
+
+      // Refresh to show new highlights
+      renderMain();
+
+      return quote;
+    });
+  });
+
+  await Promise.all(promises);
+
+  quoteExtractionState.active = false;
+  console.log("Quote extraction complete. Completed:", quoteExtractionState.completed, "Errors:", quoteExtractionState.errors);
+}
+
+// Check if quote extraction is currently running
+function isQuoteExtractionActive() {
+  return quoteExtractionState.active;
+}
 """

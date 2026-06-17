@@ -185,23 +185,22 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
     // Check if this nugget has an addressed_quote that can be highlighted
     // In report mode: only report-level quotes (paragraph quotes are from source docs, not report)
     // In document mode: paragraph-level quotes
+    // Show for any grade that has a quote (not just grade >= 4)
     var hasQuote = false;
-    if (gradeForVerdict && gradeForVerdict.grade >= 4) {
-      if (isReportMode) {
-        // Report mode: only check report-level addressed_quote
-        if (gradeForVerdict.addressed_quote) {
-          hasQuote = true;
-        }
-      } else {
-        // Document mode: check paragraph-level quotes
-        if (docGrade && docGrade.paragraphs) {
-          Object.keys(docGrade.paragraphs).forEach(function(pk) {
-            var para = docGrade.paragraphs[pk];
-            if (para.addressed_quote && para.grade >= 4) {
-              hasQuote = true;
-            }
-          });
-        }
+    if (isReportMode) {
+      // Report mode: check report-level addressed_quote
+      if (gradeForVerdict && gradeForVerdict.addressed_quote) {
+        hasQuote = true;
+      }
+    } else {
+      // Document mode: check paragraph-level quotes
+      if (docGrade && docGrade.paragraphs) {
+        Object.keys(docGrade.paragraphs).forEach(function(pk) {
+          var para = docGrade.paragraphs[pk];
+          if (para.addressed_quote) {
+            hasQuote = true;
+          }
+        });
       }
     }
 
@@ -332,6 +331,10 @@ function renderNuggetPanel(topicId, currentDocIds) {
   html += '<span class="nugget-panel-toggle">&#9656;</span>';
   html += 'Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')';
   html += '</h3>';
+  html += '<div class="nugget-panel-actions">';
+  html += '<button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button>';
+  html += '<span id="quote-extraction-progress" class="quote-progress-inline"></span>';
+  html += '</div>';
   html += '<div class="nugget-panel-content">';
 
   // Render each category
@@ -387,6 +390,17 @@ function attachNuggetPanelHandlers() {
       }
     };
   });
+
+  // Quote all button
+  var quoteAllBtn = document.getElementById('quote-all-btn');
+  if (quoteAllBtn) {
+    quoteAllBtn.onclick = function(e) {
+      e.stopPropagation();
+      if (typeof extractQuotesForActiveNuggets === "function" && !isQuoteExtractionActive()) {
+        extractQuotesForActiveNuggets();
+      }
+    };
+  }
 }
 
 // Get current document IDs based on mode
@@ -537,10 +551,10 @@ function getQuoteHighlights(topicId, runId, docId) {
       // Document mode - check doc_grades
       gradeInfo = getDocGrade(topicId, docId, nuggetId);
       if (gradeInfo && gradeInfo.paragraphs) {
-        // Look for addressed_quote in paragraphs
+        // Look for addressed_quote in paragraphs (any grade with a quote)
         Object.keys(gradeInfo.paragraphs).forEach(function(pk) {
           var para = gradeInfo.paragraphs[pk];
-          if (para.addressed_quote && para.grade >= 4) {
+          if (para.addressed_quote) {
             highlights.push({
               quote: para.addressed_quote,
               nuggetId: nuggetId,
@@ -551,9 +565,9 @@ function getQuoteHighlights(topicId, runId, docId) {
         });
       }
     } else if (runId) {
-      // Report mode - check report grades
+      // Report mode - check report grades (any grade with a quote)
       gradeInfo = getReportGrade(topicId, runId, nuggetId);
-      if (gradeInfo && gradeInfo.addressed_quote && gradeInfo.grade >= 4) {
+      if (gradeInfo && gradeInfo.addressed_quote) {
         highlights.push({
           quote: gradeInfo.addressed_quote,
           nuggetId: nuggetId,

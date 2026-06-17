@@ -233,6 +233,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .nugget-panel.collapsed .nugget-panel-toggle { transform: rotate(0deg); }
 .nugget-panel.collapsed .nugget-panel-content { display: none; }
 .nugget-panel-content { }
+.nugget-panel-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-left: 14px; }
+.quote-all-btn { padding: 3px 10px; background: #6c757d; color: #fff; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.quote-all-btn:hover { background: #5a6268; }
+.quote-all-btn:disabled { background: #adb5bd; cursor: not-allowed; }
+.quote-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 18px; background: #e3f2fd; color: #1976d2; border-radius: 9px; font-size: 10px; font-weight: 600; }
+.quote-progress-inline.quote-active { background: #e3f2fd; color: #1976d2; }
+.quote-progress-inline.quote-done { background: #e8f5e9; color: #2e7d32; }
 
 /* Nugget categories */
 .nugget-category { margin-bottom: 12px; }
