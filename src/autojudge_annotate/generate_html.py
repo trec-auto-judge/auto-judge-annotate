@@ -135,7 +135,10 @@ def _load_nugget_grades(path: Path) -> List[dict]:
 
 
 def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, dict]]]:
-    """Serialize nugget grades to nested dict.
+    """Serialize report-level nugget grades to nested dict.
+
+    Input format (nugget-grades.jsonl for reports):
+        {run_id, query_id, nugget_id, question, grade, reasoning, confidence}
 
     Returns:
         Dict[query_id][run_id][nugget_id] -> {grade, reasoning, confidence}
@@ -145,6 +148,9 @@ def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str
         query_id = g.get("query_id", "")
         run_id = g.get("run_id", "")
         nugget_id = g.get("nugget_id", "")
+
+        if not query_id or not run_id or not nugget_id:
+            continue
 
         if query_id not in result:
             result[query_id] = {}
@@ -160,11 +166,82 @@ def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str
     return result
 
 
-def _extract_nuggets_from_grades(grades: List[dict]) -> Dict[str, Dict[str, dict]]:
-    """Extract unique nuggets from grades file to build a nugget bank.
+def _serialize_doc_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, dict]]]:
+    """Serialize document-level nugget grades to nested dict.
+
+    Input format (nugget-doc-grades.jsonl):
+        {run_id, query_id, nugget_id, question, passage, doc_id, paragraph_idx, grade, reasoning, confidence}
 
     Returns:
-        Dict mapping query_id -> nugget_id -> {nugget_id, text, ..., has_grades: True}
+        Dict[query_id][doc_id][nugget_id] -> {
+            "paragraphs": {
+                "0": {grade, reasoning, confidence, passage},
+                "1": {...},
+            },
+            "max_grade": int,  # max across all paragraphs for this doc
+        }
+
+    Note: doc_grades are keyed by (query_id, doc_id, nugget_id), not by run_id,
+    since document content is the same across runs.
+    """
+    # First pass: collect all grades per (query, doc, nugget)
+    temp: Dict[str, Dict[str, Dict[str, list]]] = {}
+    for g in grades:
+        query_id = g.get("query_id", "")
+        doc_id = g.get("doc_id", "")
+        nugget_id = g.get("nugget_id", "")
+
+        if not query_id or not doc_id or not nugget_id:
+            continue
+
+        if query_id not in temp:
+            temp[query_id] = {}
+        if doc_id not in temp[query_id]:
+            temp[query_id][doc_id] = {}
+        if nugget_id not in temp[query_id][doc_id]:
+            temp[query_id][doc_id][nugget_id] = []
+
+        temp[query_id][doc_id][nugget_id].append(g)
+
+    # Second pass: structure with paragraph indices
+    result: Dict[str, Dict[str, Dict[str, dict]]] = {}
+    for query_id, docs in temp.items():
+        result[query_id] = {}
+        for doc_id, nuggets in docs.items():
+            result[query_id][doc_id] = {}
+            for nugget_id, grade_list in nuggets.items():
+                paragraphs: Dict[str, dict] = {}
+                max_grade = 0
+                for g in grade_list:
+                    paragraph_idx = str(g.get("paragraph_idx", 0))
+                    grade = g.get("grade", 0)
+                    paragraphs[paragraph_idx] = {
+                        "grade": grade,
+                        "reasoning": g.get("reasoning", ""),
+                        "confidence": g.get("confidence", 0.0),
+                        "passage": g.get("passage", ""),
+                    }
+                    if grade > max_grade:
+                        max_grade = grade
+
+                result[query_id][doc_id][nugget_id] = {
+                    "paragraphs": paragraphs,
+                    "max_grade": max_grade,
+                }
+
+    return result
+
+
+def _extract_nuggets_from_grades(grades: List[dict], is_doc_grades: bool = False) -> Dict[str, Dict[str, dict]]:
+    """Extract unique nuggets from grades file to build a nugget bank.
+
+    Args:
+        grades: List of grade entries
+        is_doc_grades: If True, marks nuggets as has_doc_info=True (from doc grades file)
+                       If False, marks nuggets as has_grades=True (from report grades file)
+
+    Returns:
+        Dict mapping query_id -> nugget_id -> {nugget_id, text, ..., has_grades/has_doc_info}
     """
     result: Dict[str, Dict[str, dict]] = {}
 
@@ -187,8 +264,8 @@ def _extract_nuggets_from_grades(grades: List[dict]) -> Dict[str, Dict[str, dict
                 "importance": None,
                 "quality": None,
                 "doc_ids": [],
-                "has_grades": True,
-                "has_doc_info": False,
+                "has_grades": not is_doc_grades,
+                "has_doc_info": is_doc_grades,
             }
 
     return result
@@ -334,6 +411,12 @@ def cli():
     default=None,
     help="Nugget grades file (JSONL) with per-report nugget grading results",
 )
+@click.option(
+    "--doc-grades",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Document grades file (JSONL) with per-doc/paragraph nugget grading results",
+)
 def generate(
     rag_responses: Path,
     rag_topics: Path,
@@ -345,6 +428,7 @@ def generate(
     supabase_anon_key: str,
     nugget_banks: Optional[Path],
     nugget_grades: Optional[Path],
+    doc_grades: Optional[Path],
 ) -> None:
     """Generate an HTML annotation interface from reports and topics."""
     # Load requests
@@ -398,7 +482,7 @@ def generate(
         )
         click.echo(f"Loaded {total_nuggets} nuggets across {len(loaded_nugget_banks.banks)} topics from {nugget_banks}")
 
-    # Load nugget grades if provided
+    # Load nugget grades if provided (report-level)
     serialized_grades: Dict[str, Dict[str, Dict[str, dict]]] = {}
     nuggets_from_grades: Dict[str, Dict[str, dict]] = {}
     if nugget_grades:
@@ -409,11 +493,31 @@ def generate(
         num_runs = sum(len(runs) for runs in serialized_grades.values())
         click.echo(f"Loaded {total_grades} nugget grades across {num_runs} run/topic combinations from {nugget_grades}")
 
-    # Merge nugget banks: union of nuggets from both sources (dict-based merge)
-    # Start with grades-extracted nuggets, then update with bank nuggets (bank takes precedence)
+    # Load doc grades if provided (document-level)
+    serialized_doc_grades: Dict[str, Dict[str, Dict[str, dict]]] = {}
+    nuggets_from_doc_grades: Dict[str, Dict[str, dict]] = {}
+    if doc_grades:
+        raw_doc_grades = _load_nugget_grades(doc_grades)  # same JSONL loading
+        serialized_doc_grades = _serialize_doc_grades(raw_doc_grades)
+        nuggets_from_doc_grades = _extract_nuggets_from_grades(raw_doc_grades, is_doc_grades=True)
+        total_doc_grades = len(raw_doc_grades)
+        num_docs = sum(len(docs) for docs in serialized_doc_grades.values())
+        click.echo(f"Loaded {total_doc_grades} doc grades across {num_docs} doc/topic combinations from {doc_grades}")
+
+    # Merge nugget banks: union of nuggets from all sources (dict-based merge)
+    # Priority: nugget_banks > report grades > doc grades (last one sets flags correctly)
     merged_nuggets: Dict[str, Dict[str, dict]] = {}
-    for topic_id, nuggets in nuggets_from_grades.items():
+    # 1. Start with doc grades nuggets (has_doc_info=True)
+    for topic_id, nuggets in nuggets_from_doc_grades.items():
         merged_nuggets.setdefault(topic_id, {}).update(nuggets)
+    # 2. Merge report grades nuggets (has_grades=True, overwrites doc grades flags)
+    for topic_id, nuggets in nuggets_from_grades.items():
+        for nid, nugget in nuggets.items():
+            if topic_id in merged_nuggets and nid in merged_nuggets[topic_id]:
+                # Merge flags: keep has_doc_info if already set
+                nugget["has_doc_info"] = merged_nuggets[topic_id][nid].get("has_doc_info", False)
+            merged_nuggets.setdefault(topic_id, {})[nid] = nugget
+    # 3. Merge nugget banks (highest priority, may have additional metadata)
     bank_nuggets = _serialize_nugget_banks_as_dict(loaded_nugget_banks)
     for topic_id, nuggets in bank_nuggets.items():
         merged_nuggets.setdefault(topic_id, {}).update(nuggets)
@@ -430,6 +534,7 @@ def generate(
         "reports": _serialize_reports(all_reports),
         "nugget_banks": final_nugget_banks,
         "nugget_grades": serialized_grades,
+        "doc_grades": serialized_doc_grades,
         "show_documents": show_documents,
         "dataset": dataset,
         "supabase_url": supabase_url or "",

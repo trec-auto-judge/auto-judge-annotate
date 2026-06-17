@@ -49,6 +49,34 @@ function getReportGrade(topicId, runId, nuggetId) {
   return runGrades[nuggetId] || null;
 }
 
+// Get document-level grade for a nugget
+// Returns: {grade, reasoning, confidence, paragraphs} or null if no grade
+// Structure: DATA.doc_grades[query_id][doc_id][nugget_id] -> {paragraphs: {...}, max_grade: int}
+function getDocGrade(topicId, docId, nuggetId) {
+  if (!DATA.doc_grades) {
+    return null;
+  }
+  var topicGrades = DATA.doc_grades[topicId];
+  if (!topicGrades) {
+    return null;
+  }
+  var docGrades = topicGrades[docId];
+  if (!docGrades) {
+    return null;
+  }
+  var nuggetGrade = docGrades[nuggetId];
+  if (!nuggetGrade) {
+    return null;
+  }
+  // Return in same format as report grades for consistency
+  return {
+    grade: nuggetGrade.max_grade || 0,
+    reasoning: "", // aggregated - individual reasoning in paragraphs
+    confidence: 0,
+    paragraphs: nuggetGrade.paragraphs || {}
+  };
+}
+
 // Determine verdict class and icon based on grade
 // Grade 4-5: satisfied (checkmark), 1-3: partial (tilde), 0: not satisfied (X)
 function gradeToVerdict(grade) {
@@ -81,11 +109,25 @@ function buildSourceDesc(reportGrade, satisfyingDocs) {
 // Render a single nugget item
 function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds, isUserNugget) {
   var satisfyingDocs = [];
+  var docGrade = null;
+  var hasDocGradeData = false;  // True if we have explicit grade data for this doc/nugget
 
-  // Check if any of the current docs satisfy this nugget (not applicable for user nuggets)
+  // Check doc grades or doc_ids for current docs (not applicable for user nuggets)
   if (!isUserNugget && currentDocIds && currentDocIds.length > 0) {
     currentDocIds.forEach(function(docId) {
-      if (docSatisfiesNugget(n, docId)) {
+      // First try doc_grades (new format)
+      var dg = getDocGrade(topicId, docId, n.nugget_id);
+      if (dg) {
+        hasDocGradeData = true;
+        // Keep the best doc grade for display
+        if (!docGrade || dg.grade > docGrade.grade) {
+          docGrade = dg;
+        }
+        if (dg.grade >= 1) {
+          satisfyingDocs.push(docId);
+        }
+      } else if (docSatisfiesNugget(n, docId)) {
+        // Fall back to doc_ids check (old format)
         satisfyingDocs.push(docId);
       }
     });
@@ -99,15 +141,21 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
 
   // Determine verdict
   var verdict;
+  var gradeForVerdict = null;
   if (reportGrade) {
+    gradeForVerdict = reportGrade;
     verdict = gradeToVerdict(reportGrade.grade);
+  } else if (docGrade) {
+    // Document mode with doc_grades (including grade=0)
+    gradeForVerdict = docGrade;
+    verdict = gradeToVerdict(docGrade.grade);
   } else if (satisfyingDocs.length > 0) {
     verdict = { cls: "nugget-satisfied", icon: "&#10003;", label: "satisfied" };
   } else if (isUserNugget) {
     verdict = unknownVerdict();
   } else if (isReportMode && !n.has_grades) {
     verdict = unknownVerdict();
-  } else if (!isReportMode && !n.has_doc_info) {
+  } else if (!isReportMode && !n.has_doc_info && !hasDocGradeData) {
     verdict = unknownVerdict();
   } else {
     verdict = { cls: "nugget-not-satisfied", icon: "&#10007;", label: "not satisfied" };
@@ -119,13 +167,27 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
   var html = '<div class="nugget-item ' + verdict.cls + (isUserNugget ? ' user-nugget-item' : '') + '">';
   html += '<span class="nugget-verdict">' + verdict.icon + '</span>';
   html += '<span class="nugget-text">' + escapeHtml(n.text) + '</span>';
-  if (sourceDesc) {
+  if (sourceDesc || gradeForVerdict) {
     var tooltip = satisfyingDocs.length > 0 ? satisfyingDocs.join(', ') : '';
-    if (reportGrade && reportGrade.reasoning) {
-      tooltip = (tooltip ? tooltip + '\\n\\n' : '') + 'Reasoning: ' + reportGrade.reasoning;
+    if (gradeForVerdict && gradeForVerdict.reasoning) {
+      tooltip = (tooltip ? tooltip + '\\n\\n' : '') + 'Reasoning: ' + gradeForVerdict.reasoning;
+    }
+    // Show paragraph-level reasoning from doc grades
+    if (docGrade && docGrade.paragraphs) {
+      var paraKeys = Object.keys(docGrade.paragraphs);
+      paraKeys.forEach(function(pk) {
+        var para = docGrade.paragraphs[pk];
+        if (para.reasoning) {
+          tooltip = (tooltip ? tooltip + '\\n\\n' : '') + 'P' + pk + ' (grade ' + para.grade + '): ' + para.reasoning;
+        }
+      });
     }
     html += '<span class="nugget-docs" title="' + escapeHtml(tooltip) + '">';
-    html += '(' + sourceDesc + ')';
+    if (sourceDesc) {
+      html += '(' + sourceDesc + ')';
+    } else if (gradeForVerdict) {
+      html += '(grade: ' + gradeForVerdict.grade + ')';
+    }
     html += '</span>';
   }
   html += '</div>';
@@ -359,7 +421,8 @@ function countNuggetCoverage(topicId, runId) {
 }
 
 // Count nugget coverage for a single document
-// Returns {satisfied: N, total: M} where satisfied means doc_ids includes this docId
+// Returns {satisfied: N, total: M} where satisfied means grade >= 1 from doc_grades
+// Falls back to doc_ids check only if no doc_grades entry exists for this nugget
 function countDocNuggetCoverage(topicId, docId) {
   var bank = getNuggetsForTopic(topicId);
   var nuggets = bank.nuggets || [];
@@ -374,6 +437,16 @@ function countDocNuggetCoverage(topicId, docId) {
 
   // Check nugget questions
   nuggets.forEach(function(n) {
+    // First try doc_grades (new format)
+    var docGrade = getDocGrade(topicId, docId, n.nugget_id);
+    if (docGrade) {
+      // Have explicit grade data - use it (grade=0 means not satisfied)
+      if (docGrade.grade >= 1) {
+        satisfied++;
+      }
+      return;
+    }
+    // Fall back to doc_ids check (old format) only if no doc_grades entry
     if (docSatisfiesNugget(n, docId)) {
       satisfied++;
     }
@@ -381,6 +454,13 @@ function countDocNuggetCoverage(topicId, docId) {
 
   // Check claims
   claims.forEach(function(c) {
+    var docGrade = getDocGrade(topicId, docId, c.claim_id);
+    if (docGrade) {
+      if (docGrade.grade >= 1) {
+        satisfied++;
+      }
+      return;
+    }
     if (docSatisfiesNugget(c, docId)) {
       satisfied++;
     }
