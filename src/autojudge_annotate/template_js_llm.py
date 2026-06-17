@@ -352,13 +352,94 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
     // The negative weight for ranking avoid nuggets is handled separately.
     // Motto: "Nuggets get a check mark whenever they are present."
 
-    return {
+    var gradeData = {
       grade: grade,
       reasoning: parsed.reasoning || "",
-      confidence: parseFloat(parsed.confidence) || 0.5
+      confidence: parseFloat(parsed.confidence) || 0.5,
+      addressed_quote: null
     };
+
+    // For high grades (>= 4), extract the addressed quote
+    if (grade >= 4) {
+      var quote = await extractAddressedQuote(nuggetText, passage);
+      if (quote) {
+        gradeData.addressed_quote = quote;
+      }
+    }
+
+    return gradeData;
   } catch (err) {
     console.error("Failed to parse grade response:", result, err);
+    return null;
+  }
+}
+
+// Extract the contiguous quote from a passage that addresses a question
+// Returns the quote string or null if not found/invalid
+async function extractAddressedQuote(question, passage) {
+  var systemPrompt = "Extract a contiguous verbatim quote from a passage that addresses a question.";
+
+  var prompt = "## Question\n" + question + "\n\n";
+  prompt += "## Passage\n" + passage.substring(0, 8000) + "\n\n";
+  prompt += "## Task\n";
+  prompt += "Find a SINGLE CONTIGUOUS text span that best supports the answer to the question.\n\n";
+  prompt += "CRITICAL REQUIREMENTS:\n";
+  prompt += "- The quote MUST be a single contiguous span - one unbroken sequence of characters that appears exactly as-is in the passage\n";
+  prompt += "- Do NOT combine sentences from different parts of the passage\n";
+  prompt += "- Do NOT rearrange or reorder text\n";
+  prompt += "- Do NOT include quotation marks around the extracted text\n";
+  prompt += "- Copy the text character-for-character from the passage\n\n";
+  prompt += "If multiple relevant sections exist, choose the SINGLE BEST contiguous span. Do not try to combine them.\n\n";
+  prompt += "Respond with JSON in this exact format:\n";
+  prompt += "{\n";
+  prompt += '  "extracted_quote": "the exact contiguous text from the passage, or null if none found",\n';
+  prompt += '  "confidence": 0.0-1.0\n';
+  prompt += "}\n\n";
+  prompt += "Only respond with the JSON, no other text.";
+
+  var result = await callLlm(prompt, systemPrompt);
+  if (!result) return null;
+
+  try {
+    var jsonStr = result.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    }
+    var parsed = JSON.parse(jsonStr);
+
+    var quote = parsed.extracted_quote;
+    var confidence = parseFloat(parsed.confidence) || 0.5;
+
+    // Normalize empty/none values
+    if (!quote || quote.toLowerCase() === "none" || quote.toLowerCase() === "null" || quote === "n/a") {
+      return null;
+    }
+
+    // Strip surrounding quotes if LLM added them anyway
+    quote = quote.trim();
+    while (quote.length >= 2 && (
+      (quote.startsWith('"') && quote.endsWith('"')) ||
+      (quote.startsWith("'") && quote.endsWith("'"))
+    )) {
+      quote = quote.slice(1, -1).trim();
+    }
+
+    // Validate: quote must actually exist in the passage (whitespace-normalized)
+    var normPassage = passage.replace(/\s+/g, " ").toLowerCase();
+    var normQuote = quote.replace(/\s+/g, " ").toLowerCase();
+    if (!normPassage.includes(normQuote)) {
+      console.warn("Extracted quote not found in passage, discarding:", quote.substring(0, 50) + "...");
+      return null;
+    }
+
+    // Only accept if confidence is reasonable
+    if (confidence < 0.2) {
+      return null;
+    }
+
+    return quote;
+  } catch (err) {
+    console.error("Failed to parse quote extraction response:", result, err);
     return null;
   }
 }

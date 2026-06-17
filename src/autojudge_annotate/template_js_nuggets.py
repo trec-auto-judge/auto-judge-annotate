@@ -515,7 +515,13 @@ function getQuoteHighlights(topicId, runId, docId) {
   var bank = getNuggetsForTopic(topicId);
   var nuggets = bank.nuggets || [];
 
-  nuggets.forEach(function(n) {
+  // Include user-created nuggets from canonicalized clues
+  var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
+    ? getCanonicalizedNuggetsForTopic(topicId)
+    : [];
+  var allNuggets = nuggets.concat(userNuggets);
+
+  allNuggets.forEach(function(n) {
     var nuggetType = n.nugget_type || "must_have";
     var nuggetId = n.nugget_id;
     var gradeInfo = null;
