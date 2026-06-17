@@ -148,7 +148,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .report-section { margin-bottom: 24px; }
 .report-section h2 { font-size: 16px; margin-bottom: 12px; color: #2c3e50; }
 .report-text { line-height: 1.8; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 6px; position: relative; user-select: text; white-space: pre-wrap; }
-.report-text mark { background: #ffeaa7; border-radius: 2px; cursor: pointer; }
+.report-text mark { background: #87ceeb; border-radius: 2px; cursor: pointer; }
 .report-text mark .remove-span { display: none; width: 14px; height: 14px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; vertical-align: top; margin-left: 1px; }
 .report-text mark:hover .remove-span { display: inline-block; }
 .citation-marker { color: #2980b9; font-size: 12px; cursor: pointer; vertical-align: super; font-weight: 600; }
@@ -157,7 +157,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* Spans list */
 .spans-section { margin: 16px 0; }
 .spans-section h3 { font-size: 14px; margin-bottom: 8px; color: #555; }
-.span-chip { display: inline-block; background: #ffeaa7; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.span-chip { display: inline-block; background: #87ceeb; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Rating */
 .rating-section { margin: 16px 0; }
@@ -202,7 +202,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .stepper-nav button:disabled { background: #bdc3c7; cursor: not-allowed; }
 
 .sentence-display { line-height: 1.8; padding: 12px; background: #fffbe6; border: 2px solid #f1c40f; border-radius: 6px; user-select: text; white-space: pre-wrap; }
-.sentence-display mark { background: #ffd700; border-radius: 2px; cursor: pointer; }
+.sentence-display mark { background: #87ceeb; border-radius: 2px; cursor: pointer; }
 .sentence-display mark .remove-span { display: none; width: 14px; height: 14px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; vertical-align: top; margin-left: 1px; }
 .sentence-display mark:hover .remove-span { display: inline-block; }
 
@@ -223,7 +223,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .sent-item .checkmark { margin-left: auto; color: #27ae60; font-weight: bold; }
 .sent-item .sent-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
 .sent-item .cite-count { font-size: 10px; opacity: 0.7; }
-.report-span-chip { display: inline-block; background: #ffeaa7; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
+.report-span-chip { display: inline-block; background: #87ceeb; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
 .document-span-chip { display: inline-block; background: #b8e6ff; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 12px; }
 
 /* Nugget panel */
