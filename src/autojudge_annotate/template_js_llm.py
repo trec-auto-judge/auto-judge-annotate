@@ -420,6 +420,7 @@ async function extractAddressedQuote(question, passage) {
 
     // Normalize empty/none values
     if (!quote || quote.toLowerCase() === "none" || quote.toLowerCase() === "null" || quote === "n/a") {
+      console.warn("Quote extraction returned empty/none value");
       return null;
     }
 
@@ -436,12 +437,14 @@ async function extractAddressedQuote(question, passage) {
     var normPassage = passage.replace(/\s+/g, " ").toLowerCase();
     var normQuote = quote.replace(/\s+/g, " ").toLowerCase();
     if (!normPassage.includes(normQuote)) {
-      console.warn("Extracted quote not found in passage, discarding:", quote.substring(0, 50) + "...");
+      console.warn("Extracted quote not found in passage, discarding:", quote.substring(0, 80) + "...");
+      console.warn("Quote length:", quote.length, "Passage length:", passage.length);
       return null;
     }
 
     // Only accept if confidence is reasonable
     if (confidence < 0.2) {
+      console.warn("Quote extraction confidence too low:", confidence);
       return null;
     }
 
@@ -841,12 +844,16 @@ async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNu
 
     // For high grades (>= 4), extract the addressed quote
     if (grade >= 4) {
+      console.log("Doc grade >= 4, extracting quote for nugget:", nuggetText.substring(0, 50) + "...");
       gradeDocsState.total++;
       updateGradeDocsProgress();
 
       var quote = await extractAddressedQuote(nuggetText, passage);
       if (quote) {
         gradeData.addressed_quote = quote;
+        console.log("Quote extracted successfully:", quote.substring(0, 50) + "...");
+      } else {
+        console.warn("Quote extraction failed or returned null for high-grade doc nugget");
       }
 
       gradeDocsState.completed++;
@@ -879,10 +886,6 @@ async function gradeDocsForReport() {
 
   var docIds = (typeof getReportDocIds === "function") ? getReportDocIds(report) : [];
   console.log("Grade Docs: report", runId, "has", docIds.length, "cited documents:", docIds);
-  if (docIds.length === 0) {
-    alert("No documents cited by this report.");
-    return;
-  }
 
   // Get active user nuggets (only user-created nuggets, not pre-loaded ones)
   var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
@@ -904,46 +907,74 @@ async function gradeDocsForReport() {
     return;
   }
 
-  // Build list of (nugget, doc) pairs that need grading
-  var toProcess = [];
+  // Build list of items that need grading (report + documents)
+  var toProcessReport = [];
+  var toProcessDocs = [];
+
   enabledNuggets.forEach(function(n) {
     var nuggetText = n.text || n.question || "";
     var isAvoidNugget = n.nugget_type === "avoid";
 
-    docIds.forEach(function(docId) {
-      // Check if we already have a grade for this (nugget, doc) pair
-      var existingGrade = (typeof getDocGrade === "function") ? getDocGrade(topicId, docId, n.nugget_id) : null;
-
-      // Skip if already graded (has a grade value)
-      if (existingGrade && typeof existingGrade.grade === "number") {
-        return;
-      }
-
-      toProcess.push({
+    // Check if report needs grading for this nugget
+    var existingReportGrade = (typeof getReportGrade === "function") ? getReportGrade(topicId, runId, n.nugget_id) : null;
+    if (!existingReportGrade || typeof existingReportGrade.grade !== "number") {
+      toProcessReport.push({
         nugget: n,
-        docId: docId,
         nuggetText: nuggetText,
         isAvoidNugget: isAvoidNugget
       });
+    }
+
+    // Check if documents need grading for this nugget
+    docIds.forEach(function(docId) {
+      var existingDocGrade = (typeof getDocGrade === "function") ? getDocGrade(topicId, docId, n.nugget_id) : null;
+      if (!existingDocGrade || typeof existingDocGrade.grade !== "number") {
+        toProcessDocs.push({
+          nugget: n,
+          docId: docId,
+          nuggetText: nuggetText,
+          isAvoidNugget: isAvoidNugget
+        });
+      }
     });
   });
 
-  if (toProcess.length === 0) {
-    alert("All nugget-document pairs are already graded.");
+  var totalToProcess = toProcessReport.length + toProcessDocs.length;
+  if (totalToProcess === 0) {
+    alert("All nuggets are already graded for this report and its documents.");
     return;
   }
 
-  console.log("Grade Docs: processing", toProcess.length, "pairs across", docIds.length, "documents and", enabledNuggets.length, "nuggets");
+  console.log("Grade Docs: processing", toProcessReport.length, "report grades +", toProcessDocs.length, "doc grades for", enabledNuggets.length, "nuggets");
 
   // Initialize progress
   gradeDocsState.active = true;
   gradeDocsState.completed = 0;
-  gradeDocsState.total = toProcess.length;
+  gradeDocsState.total = totalToProcess;
   gradeDocsState.errors = 0;
   updateGradeDocsProgress();
 
-  // Process each pair
-  var promises = toProcess.map(function(item) {
+  // Process report grades
+  var reportPromises = toProcessReport.map(function(item) {
+    return queueLlmTask(async function() {
+      var result = await gradeNuggetForReport(topicId, runId, item.nugget.nugget_id, item.nuggetText, item.isAvoidNugget);
+
+      if (result) {
+        storeUserGrade(topicId, runId, item.nugget.nugget_id, result);
+      } else {
+        gradeDocsState.errors++;
+      }
+
+      gradeDocsState.completed++;
+      updateGradeDocsProgress();
+      renderMain();
+
+      return result;
+    });
+  });
+
+  // Process document grades
+  var docPromises = toProcessDocs.map(function(item) {
     return queueLlmTask(async function() {
       var result = await gradeNuggetForDoc(topicId, item.docId, item.nugget.nugget_id, item.nuggetText, item.isAvoidNugget);
 
@@ -955,15 +986,13 @@ async function gradeDocsForReport() {
 
       gradeDocsState.completed++;
       updateGradeDocsProgress();
-
-      // Refresh main panel to show updated verdicts
       renderMain();
 
       return result;
     });
   });
 
-  await Promise.all(promises);
+  await Promise.all(reportPromises.concat(docPromises));
 
   gradeDocsState.active = false;
   console.log("Grade Docs complete. Completed:", gradeDocsState.completed, "Errors:", gradeDocsState.errors);
