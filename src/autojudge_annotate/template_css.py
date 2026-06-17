@@ -243,6 +243,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .quote-progress-inline.quote-active { background: #e3f2fd; color: #1976d2; }
 .quote-progress-inline.quote-done { background: #e8f5e9; color: #2e7d32; }
 
+/* Grade Docs button */
+.grade-docs-btn { padding: 2px 8px; background: #17a2b8; color: #fff; border: none; border-radius: 3px; font-size: 10px; cursor: pointer; margin-right: 4px; }
+.grade-docs-btn:hover { background: #138496; }
+.grade-docs-btn:disabled { background: #adb5bd; cursor: not-allowed; }
+.grade-docs-progress-inline { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 16px; background: #e3f2fd; color: #1976d2; border-radius: 8px; font-size: 9px; font-weight: 600; margin-right: 4px; }
+.grade-docs-progress-inline:empty { display: none; }
+.grade-docs-progress-inline.grade-docs-active { background: #e3f2fd; color: #1976d2; }
+.grade-docs-progress-inline.grade-docs-done { background: #e8f5e9; color: #2e7d32; }
+
 /* Nugget categories */
 .nugget-category { margin-bottom: 12px; }
 .nugget-category:last-child { margin-bottom: 0; }

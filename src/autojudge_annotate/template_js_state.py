@@ -24,7 +24,9 @@ var state = {
   preSoloEnabledNuggets: null,  // snapshot of enabledNuggets before solo (to restore)
   preSoloNuggetIds: null,  // list of nugget IDs that existed before solo (to detect new nuggets)
   // User-generated nugget grades (from LLM grading)
-  userNuggetGrades: {},  // topicId -> runId -> nuggetId -> {grade, reasoning, confidence}
+  userNuggetGrades: {},  // topicId -> runId -> nuggetId -> {grade, reasoning, confidence, addressed_quote}
+  // User-generated document grades (from "Grade Docs" button)
+  userDocGrades: {},  // topicId -> docId -> nuggetId -> {grade, reasoning, confidence, addressed_quote, paragraphs}
   // Heavy highlight for addressed_quote (toggle via clicking "(report)")
   heavyHighlightNuggetId: null  // nugget_id to show with heavy highlight (null = none)
 };
@@ -128,6 +130,19 @@ if (savedUserGrades) {
 // Save user nugget grades to localStorage
 function saveUserNuggetGrades() {
   localStorage.setItem("autojudge_annotate_grades_" + DATA.dataset, JSON.stringify(state.userNuggetGrades));
+}
+
+// Load saved user doc grades from localStorage
+var savedUserDocGrades = localStorage.getItem("autojudge_annotate_docgrades_" + DATA.dataset);
+if (savedUserDocGrades) {
+  try {
+    state.userDocGrades = JSON.parse(savedUserDocGrades);
+  } catch(e) { state.userDocGrades = {}; }
+}
+
+// Save user doc grades to localStorage
+function saveUserDocGrades() {
+  localStorage.setItem("autojudge_annotate_docgrades_" + DATA.dataset, JSON.stringify(state.userDocGrades));
 }
 
 modeSelect.addEventListener("change", function() {

@@ -51,8 +51,17 @@ function getReportGrade(topicId, runId, nuggetId) {
 
 // Get document-level grade for a nugget
 // Returns: {grade, reasoning, confidence, paragraphs} or null if no grade
-// Structure: DATA.doc_grades[query_id][doc_id][nugget_id] -> {paragraphs: {...}, max_grade: int}
+// Checks both state.userDocGrades (user-generated) and DATA.doc_grades (pre-loaded)
 function getDocGrade(topicId, docId, nuggetId) {
+  // First check user-generated doc grades (these take precedence)
+  if (state.userDocGrades &&
+      state.userDocGrades[topicId] &&
+      state.userDocGrades[topicId][docId] &&
+      state.userDocGrades[topicId][docId][nuggetId]) {
+    return state.userDocGrades[topicId][docId][nuggetId];
+  }
+
+  // Then check pre-loaded grades from DATA
   if (!DATA.doc_grades) {
     return null;
   }
@@ -112,10 +121,10 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
   var docGrade = null;
   var hasDocGradeData = false;  // True if we have explicit grade data for this doc/nugget
 
-  // Check doc grades or doc_ids for current docs (not applicable for user nuggets)
-  if (!isUserNugget && currentDocIds && currentDocIds.length > 0) {
+  // Check doc grades or doc_ids for current docs
+  if (currentDocIds && currentDocIds.length > 0) {
     currentDocIds.forEach(function(docId) {
-      // First try doc_grades (new format)
+      // First try doc_grades (new format) - works for both pre-loaded and user nuggets
       var dg = getDocGrade(topicId, docId, n.nugget_id);
       if (dg) {
         hasDocGradeData = true;
@@ -126,8 +135,8 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
         if (dg.grade >= 1) {
           satisfyingDocs.push(docId);
         }
-      } else if (docSatisfiesNugget(n, docId)) {
-        // Fall back to doc_ids check (old format)
+      } else if (!isUserNugget && docSatisfiesNugget(n, docId)) {
+        // Fall back to doc_ids check (old format) - only for pre-loaded nuggets
         satisfyingDocs.push(docId);
       }
     });
@@ -193,7 +202,7 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
         hasQuote = true;
       }
     } else {
-      // Document mode: check paragraph-level quotes
+      // Document mode: check paragraph-level quotes (pre-loaded) or top-level quotes (user-generated)
       if (docGrade && docGrade.paragraphs) {
         Object.keys(docGrade.paragraphs).forEach(function(pk) {
           var para = docGrade.paragraphs[pk];
@@ -201,6 +210,9 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
             hasQuote = true;
           }
         });
+      } else if (docGrade && docGrade.addressed_quote) {
+        // Flat doc grade (user-generated format)
+        hasQuote = true;
       }
     }
 
@@ -331,6 +343,10 @@ function renderNuggetPanel(topicId, currentDocIds) {
   html += '<span class="nugget-panel-toggle">&#9656;</span>';
   html += '<span class="nugget-panel-title">Nuggets (' + enabledCount + (enabledCount < totalCount ? '/' + totalCount : '') + ')</span>';
   html += '<span class="nugget-panel-spacer"></span>';
+  if (isReportMode) {
+    html += '<button id="grade-docs-btn" class="grade-docs-btn" title="Grade user nuggets against cited documents">Grade Docs</button>';
+    html += '<span id="grade-docs-progress" class="grade-docs-progress-inline"></span>';
+  }
   html += '<button id="quote-all-btn" class="quote-all-btn" title="Extract quotes for all graded nuggets without quotes">Quote</button>';
   html += '<span id="quote-extraction-progress" class="quote-progress-inline"></span>';
   html += '</div>';
@@ -397,6 +413,17 @@ function attachNuggetPanelHandlers() {
       e.stopPropagation();
       if (typeof extractQuotesForActiveNuggets === "function" && !isQuoteExtractionActive()) {
         extractQuotesForActiveNuggets();
+      }
+    };
+  }
+
+  // Grade Docs button (only in report mode)
+  var gradeDocsBtn = document.getElementById('grade-docs-btn');
+  if (gradeDocsBtn) {
+    gradeDocsBtn.onclick = function(e) {
+      e.stopPropagation();
+      if (typeof gradeDocsForReport === "function" && !isGradeDocsActive()) {
+        gradeDocsForReport();
       }
     };
   }
@@ -478,7 +505,13 @@ function countDocNuggetCoverage(topicId, docId) {
   var bank = getNuggetsForTopic(topicId);
   var nuggets = bank.nuggets || [];
   var claims = bank.claims || [];
-  var total = nuggets.length + claims.length;
+
+  // Include user-created nuggets
+  var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
+    ? getCanonicalizedNuggetsForTopic(topicId)
+    : [];
+
+  var total = nuggets.length + claims.length + userNuggets.length;
 
   if (total === 0) {
     return { satisfied: 0, total: 0 };
@@ -517,6 +550,14 @@ function countDocNuggetCoverage(topicId, docId) {
     }
   });
 
+  // Check user-created nuggets
+  userNuggets.forEach(function(n) {
+    var docGrade = getDocGrade(topicId, docId, n.nugget_id);
+    if (docGrade && docGrade.grade >= 1) {
+      satisfied++;
+    }
+  });
+
   return { satisfied: satisfied, total: total };
 }
 
@@ -550,7 +591,7 @@ function getQuoteHighlights(topicId, runId, docId) {
       // Document mode - check doc_grades
       gradeInfo = getDocGrade(topicId, docId, nuggetId);
       if (gradeInfo && gradeInfo.paragraphs) {
-        // Look for addressed_quote in paragraphs (any grade with a quote)
+        // Look for addressed_quote in paragraphs (pre-loaded format)
         Object.keys(gradeInfo.paragraphs).forEach(function(pk) {
           var para = gradeInfo.paragraphs[pk];
           if (para.addressed_quote) {
@@ -561,6 +602,14 @@ function getQuoteHighlights(topicId, runId, docId) {
               isHeavy: state.heavyHighlightNuggetId === nuggetId
             });
           }
+        });
+      } else if (gradeInfo && gradeInfo.addressed_quote) {
+        // Flat doc grade (user-generated format)
+        highlights.push({
+          quote: gradeInfo.addressed_quote,
+          nuggetId: nuggetId,
+          nuggetType: nuggetType,
+          isHeavy: state.heavyHighlightNuggetId === nuggetId
         });
       }
     } else if (runId) {

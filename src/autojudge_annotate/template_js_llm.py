@@ -606,7 +606,7 @@ async function extractQuotesForActiveNuggets() {
     var gradeInfo = null;
     if (isDocMode) {
       gradeInfo = getDocGrade(topicId, docId, n.nugget_id);
-      // For documents, check if any paragraph has grade >= 1 but no quote
+      // For documents with paragraph-level grades (pre-loaded format)
       if (gradeInfo && gradeInfo.paragraphs) {
         var needsQuote = false;
         var bestPara = null;
@@ -630,6 +630,14 @@ async function extractQuotesForActiveNuggets() {
             nuggetText: n.text || n.question || ""
           });
         }
+      } else if (gradeInfo && gradeInfo.grade >= 1 && !gradeInfo.addressed_quote) {
+        // For documents with flat grades (user-generated format)
+        toProcess.push({
+          nugget: n,
+          gradeInfo: gradeInfo,
+          paragraphKey: null,
+          nuggetText: n.text || n.question || ""
+        });
       }
     } else if (runId) {
       gradeInfo = getReportGrade(topicId, runId, n.nugget_id);
@@ -669,9 +677,21 @@ async function extractQuotesForActiveNuggets() {
         console.log("Quote extracted for", item.nugget.nugget_id, ":", quote.substring(0, 50) + "...");
 
         if (isDocMode && item.paragraphKey !== null) {
-          // Document mode - store quote at paragraph level
+          // Document mode with paragraph-level grades - store quote at paragraph level
           item.gradeInfo.paragraphs[item.paragraphKey].addressed_quote = quote;
           // Note: doc grades are stored in DATA.doc_grades, modification persists in memory
+        } else if (isDocMode) {
+          // Document mode with flat grades (user-generated) - store quote at top level
+          item.gradeInfo.addressed_quote = quote;
+
+          // Also store in userDocGrades (takes precedence over DATA.doc_grades)
+          var updatedDocGrade = {
+            grade: item.gradeInfo.grade,
+            reasoning: item.gradeInfo.reasoning || "",
+            confidence: item.gradeInfo.confidence || 0.5,
+            addressed_quote: quote
+          };
+          storeUserDocGrade(topicId, docId, item.nugget.nugget_id, updatedDocGrade);
         } else {
           // Report mode - store quote at top level
           item.gradeInfo.addressed_quote = quote;
@@ -711,5 +731,251 @@ async function extractQuotesForActiveNuggets() {
 // Check if quote extraction is currently running
 function isQuoteExtractionActive() {
   return quoteExtractionState.active;
+}
+
+// --- Grade Documents for Current Report ---
+
+var gradeDocsState = {
+  active: false,
+  completed: 0,
+  total: 0,
+  errors: 0
+};
+
+function updateGradeDocsProgress() {
+  var progressEl = document.getElementById("grade-docs-progress");
+  if (progressEl) {
+    if (gradeDocsState.total === 0) {
+      progressEl.textContent = "";
+      progressEl.className = "grade-docs-progress-inline";
+    } else if (gradeDocsState.completed >= gradeDocsState.total) {
+      progressEl.textContent = "Done!";
+      progressEl.className = "grade-docs-progress-inline grade-docs-done";
+    } else {
+      progressEl.textContent = gradeDocsState.completed + "/" + gradeDocsState.total;
+      if (gradeDocsState.errors > 0) {
+        progressEl.textContent += " (" + gradeDocsState.errors + " err)";
+      }
+      progressEl.className = "grade-docs-progress-inline grade-docs-active";
+    }
+  }
+}
+
+// Store a user-generated doc grade
+function storeUserDocGrade(topicId, docId, nuggetId, gradeData) {
+  if (!state.userDocGrades[topicId]) {
+    state.userDocGrades[topicId] = {};
+  }
+  if (!state.userDocGrades[topicId][docId]) {
+    state.userDocGrades[topicId][docId] = {};
+  }
+  state.userDocGrades[topicId][docId][nuggetId] = gradeData;
+  saveUserDocGrades();
+}
+
+// Grade a nugget against a single document
+async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNugget) {
+  var doc = docIndex[topicId] && docIndex[topicId][docId];
+  if (!doc) return null;
+
+  var passage = doc.text || doc.body || "";
+  if (!passage) {
+    console.warn("No passage text for document:", docId);
+    return null;
+  }
+
+  // Build the grading prompt (same as gradeNuggetForReport)
+  var systemPrompt = "Grade how well a passage answers a specific question.\n\n" +
+    "Can the question be answered based on the available context? Choose one:\n" +
+    "- 5: The answer is highly relevant, complete, and accurate.\n" +
+    "- 4: The answer is mostly relevant and complete but may have minor gaps or inaccuracies.\n" +
+    "- 3: The answer is partially relevant and complete, with noticeable gaps or inaccuracies.\n" +
+    "- 2: The answer has limited relevance and completeness, with significant gaps or inaccuracies.\n" +
+    "- 1: The answer is minimally relevant or complete, with substantial shortcomings.\n" +
+    "- 0: The answer is not relevant or complete at all.";
+
+  var prompt;
+  if (isAvoidNugget) {
+    prompt = "## Anti-Nugget (content to avoid)\n" + nuggetText + "\n\n";
+    prompt += "## Passage to evaluate\n" + passage.substring(0, 8000) + "\n\n";
+    prompt += "## Task\n";
+    prompt += "Check if the passage contains the problematic content described in the anti-nugget.\n";
+    prompt += "Grade 0 = content is NOT present (good), Grade 5 = content IS clearly present (bad).\n\n";
+  } else {
+    prompt = "## Question\n" + nuggetText + "\n\n";
+    prompt += "## Passage\n" + passage.substring(0, 8000) + "\n\n";
+    prompt += "## Task\n";
+    prompt += "Grade how well the passage answers the question.\n\n";
+  }
+
+  prompt += "Respond with JSON in this exact format:\n";
+  prompt += "{\n";
+  prompt += '  "grade": "0-5",\n';
+  prompt += '  "reasoning": "Brief explanation of the grade",\n';
+  prompt += '  "confidence": 0.0-1.0\n';
+  prompt += "}\n\n";
+  prompt += "Only respond with the JSON, no other text.";
+
+  var result = await callLlm(prompt, systemPrompt);
+  if (!result) return null;
+
+  try {
+    var jsonStr = result.trim();
+    if (jsonStr.startsWith("```")) {
+      jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    }
+    var parsed = JSON.parse(jsonStr);
+
+    var grade = parseInt(parsed.grade, 10);
+    if (isNaN(grade) || grade < 0 || grade > 5) {
+      console.warn("Invalid grade value:", parsed.grade);
+      grade = 0;
+    }
+
+    var gradeData = {
+      grade: grade,
+      reasoning: parsed.reasoning || "",
+      confidence: parseFloat(parsed.confidence) || 0.5,
+      addressed_quote: null
+    };
+
+    // For high grades (>= 4), extract the addressed quote
+    if (grade >= 4) {
+      gradeDocsState.total++;
+      updateGradeDocsProgress();
+
+      var quote = await extractAddressedQuote(nuggetText, passage);
+      if (quote) {
+        gradeData.addressed_quote = quote;
+      }
+
+      gradeDocsState.completed++;
+      updateGradeDocsProgress();
+    }
+
+    return gradeData;
+  } catch (err) {
+    console.error("Failed to parse grade response:", result, err);
+    return null;
+  }
+}
+
+// Grade user nuggets against all documents cited by the current report
+async function gradeDocsForReport() {
+  var topicId = state.selectedTopic;
+  var runId = state.selectedRun;
+
+  if (!topicId || !runId) {
+    alert("Please select a report first.");
+    return;
+  }
+
+  // Get cited documents from the current report
+  var report = reportIndex[topicId] && reportIndex[topicId][runId];
+  if (!report) {
+    alert("Report not found.");
+    return;
+  }
+
+  var docIds = (typeof getReportDocIds === "function") ? getReportDocIds(report) : [];
+  console.log("Grade Docs: report", runId, "has", docIds.length, "cited documents:", docIds);
+  if (docIds.length === 0) {
+    alert("No documents cited by this report.");
+    return;
+  }
+
+  // Get active user nuggets (only user-created nuggets, not pre-loaded ones)
+  var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
+    ? getCanonicalizedNuggetsForTopic(topicId)
+    : [];
+
+  if (userNuggets.length === 0) {
+    alert("No user-created nuggets for this topic. Create nuggets first by selecting spans and canonicalizing them.");
+    return;
+  }
+
+  // Filter to enabled nuggets only
+  var enabledNuggets = userNuggets.filter(function(n) {
+    return typeof isNuggetEffectivelyEnabled !== "function" || isNuggetEffectivelyEnabled(n.nugget_id);
+  });
+
+  if (enabledNuggets.length === 0) {
+    alert("No active user nuggets. Enable some nuggets using the checkboxes.");
+    return;
+  }
+
+  // Build list of (nugget, doc) pairs that need grading
+  var toProcess = [];
+  enabledNuggets.forEach(function(n) {
+    var nuggetText = n.text || n.question || "";
+    var isAvoidNugget = n.nugget_type === "avoid";
+
+    docIds.forEach(function(docId) {
+      // Check if we already have a grade for this (nugget, doc) pair
+      var existingGrade = (typeof getDocGrade === "function") ? getDocGrade(topicId, docId, n.nugget_id) : null;
+
+      // Skip if already graded (has a grade value)
+      if (existingGrade && typeof existingGrade.grade === "number") {
+        return;
+      }
+
+      toProcess.push({
+        nugget: n,
+        docId: docId,
+        nuggetText: nuggetText,
+        isAvoidNugget: isAvoidNugget
+      });
+    });
+  });
+
+  if (toProcess.length === 0) {
+    alert("All nugget-document pairs are already graded.");
+    return;
+  }
+
+  console.log("Grade Docs: processing", toProcess.length, "pairs across", docIds.length, "documents and", enabledNuggets.length, "nuggets");
+
+  // Initialize progress
+  gradeDocsState.active = true;
+  gradeDocsState.completed = 0;
+  gradeDocsState.total = toProcess.length;
+  gradeDocsState.errors = 0;
+  updateGradeDocsProgress();
+
+  // Process each pair
+  var promises = toProcess.map(function(item) {
+    return queueLlmTask(async function() {
+      var result = await gradeNuggetForDoc(topicId, item.docId, item.nugget.nugget_id, item.nuggetText, item.isAvoidNugget);
+
+      if (result) {
+        storeUserDocGrade(topicId, item.docId, item.nugget.nugget_id, result);
+      } else {
+        gradeDocsState.errors++;
+      }
+
+      gradeDocsState.completed++;
+      updateGradeDocsProgress();
+
+      // Refresh main panel to show updated verdicts
+      renderMain();
+
+      return result;
+    });
+  });
+
+  await Promise.all(promises);
+
+  gradeDocsState.active = false;
+  console.log("Grade Docs complete. Completed:", gradeDocsState.completed, "Errors:", gradeDocsState.errors);
+
+  // Update sidebar to reflect new coverage counts
+  if (typeof renderSidebar === "function") {
+    renderSidebar();
+  }
+}
+
+// Check if Grade Docs is currently running
+function isGradeDocsActive() {
+  return gradeDocsState.active;
 }
 """
