@@ -182,18 +182,26 @@ function renderNuggetItem(n, topicId, currentRunId, isReportMode, currentDocIds,
         }
       });
     }
-    // Check if this nugget has an addressed_quote (grades 4-5)
+    // Check if this nugget has an addressed_quote that can be highlighted
+    // In report mode: only report-level quotes (paragraph quotes are from source docs, not report)
+    // In document mode: paragraph-level quotes
     var hasQuote = false;
     if (gradeForVerdict && gradeForVerdict.grade >= 4) {
-      if (gradeForVerdict.addressed_quote) {
-        hasQuote = true;
-      } else if (docGrade && docGrade.paragraphs) {
-        Object.keys(docGrade.paragraphs).forEach(function(pk) {
-          var para = docGrade.paragraphs[pk];
-          if (para.addressed_quote && para.grade >= 4) {
-            hasQuote = true;
-          }
-        });
+      if (isReportMode) {
+        // Report mode: only check report-level addressed_quote
+        if (gradeForVerdict.addressed_quote) {
+          hasQuote = true;
+        }
+      } else {
+        // Document mode: check paragraph-level quotes
+        if (docGrade && docGrade.paragraphs) {
+          Object.keys(docGrade.paragraphs).forEach(function(pk) {
+            var para = docGrade.paragraphs[pk];
+            if (para.addressed_quote && para.grade >= 4) {
+              hasQuote = true;
+            }
+          });
+        }
       }
     }
 
@@ -511,7 +519,6 @@ function getQuoteHighlights(topicId, runId, docId) {
     var nuggetType = n.nugget_type || "must_have";
     var nuggetId = n.nugget_id;
     var gradeInfo = null;
-    var quote = null;
 
     if (docId) {
       // Document mode - check doc_grades
