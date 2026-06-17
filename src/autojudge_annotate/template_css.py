@@ -101,12 +101,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .report-row.parent-active .nugget-coverage { background: rgba(255,255,255,0.6); color: #2c3e50; }
 .topic-row.parent-active .nugget-coverage { background: rgba(255,255,255,0.6); color: #2c3e50; }
 
-.checkmark { color: #27ae60; font-weight: bold; flex-shrink: 0; margin-left: 4px; }
+.checkmark { color: #27ae60; font-weight: bold; flex-shrink: 0; margin-left: 4px; min-width: 14px; text-align: center; }
 .report-row.active .checkmark { color: #90EE90; }
 .report-row.parent-active .checkmark { color: #1e8449; }
 
 /* Clues indicator (hamburger icon) */
-.clues-indicator { color: #6c757d; font-size: 12px; flex-shrink: 0; min-width: 14px; }
+.clues-indicator { color: #6c757d; font-size: 12px; flex-shrink: 0; min-width: 14px; text-align: center; }
 .clues-indicator:not(:empty) { color: #007bff; }
 .report-row.active .clues-indicator { color: #a0cfff; }
 .report-row.parent-active .clues-indicator { color: #0056b3; }
