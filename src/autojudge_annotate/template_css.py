@@ -257,7 +257,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .nugget-item.nugget-partial { background: #fffdf5; }
 .nugget-item.nugget-not-satisfied { background: #fff8f8; }
 .nugget-item.nugget-unknown { background: #f8f9fa; }
-.nugget-item.user-nugget-item { background: #f0f8ff; }
+/* User-created nuggets: subtle left border instead of background override */
+/* This way verdict-based backgrounds (green/yellow/red) are preserved */
+.nugget-item.user-nugget-item { border-left: 3px solid #3498db; padding-left: 6px; }
 
 .nugget-verdict { font-size: 12px; flex-shrink: 0; min-width: 16px; }
 .nugget-satisfied .nugget-verdict { color: #28a745; }
@@ -287,9 +289,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .criteria-nugget-item label:hover { color: #2c3e50; }
 .nugget-coverage { font-size: 11px; color: #6c757d; background: #f1f3f4; padding: 2px 6px; border-radius: 10px; white-space: nowrap; margin-left: auto; }
 
-/* User-created nuggets */
-.user-nugget { background: #f0f8ff; }
-.user-nugget.nugget-avoid { background: #fff5f5; }
+/* User-created nuggets - blue left border indicator, verdict backgrounds preserved */
+.user-nugget { border-left: 3px solid #3498db; }
 .nugget-text-span { font-size: 13px; line-height: 1.4; color: #555; flex: 1; }
 
 /* Grade button for ungraded nuggets */
