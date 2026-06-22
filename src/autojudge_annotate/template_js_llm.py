@@ -468,6 +468,12 @@ function storeUserGrade(topicId, runId, nuggetId, gradeData) {
 
 // Grade a user nugget across all reports for a topic
 async function gradeUserNuggetAcrossReports(topicId, nuggetId, nuggetText, isAvoidNugget) {
+  // Check API key first to avoid multiple popups
+  if (!getLlmApiKey()) {
+    alert("Please set your OpenRouter API key first (click LLM indicator in top bar).");
+    return;
+  }
+
   var runs = reportIndex[topicId] ? Object.keys(reportIndex[topicId]) : [];
   if (runs.length === 0) {
     alert("No reports found for this topic.");
@@ -563,6 +569,12 @@ function updateQuoteExtractionProgress() {
 
 // Extract quotes for all active nuggets that have grades but no addressed_quote
 async function extractQuotesForActiveNuggets() {
+  // Check API key first to avoid multiple popups
+  if (!getLlmApiKey()) {
+    alert("Please set your OpenRouter API key first (click LLM indicator in top bar).");
+    return;
+  }
+
   var topicId = state.selectedTopic;
   var runId = state.selectedRun;
   var docId = state.selectedDoc;
@@ -865,6 +877,12 @@ async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNu
 
 // Grade user nuggets against all documents cited by the current report
 async function gradeDocsForReport() {
+  // Check API key first to avoid multiple popups
+  if (!getLlmApiKey()) {
+    alert("Please set your OpenRouter API key first (click LLM indicator in top bar).");
+    return;
+  }
+
   var topicId = state.selectedTopic;
   var runId = state.selectedRun;
 
