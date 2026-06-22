@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nugget-Centric Annotation Interface - Mockup v12</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #2c3e50;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: #2c3e50;
+      color: #fff;
+      gap: 12px;
+    }
+
+    .back-btn {
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 12px;
+      display: none;
+    }
+
+    .back-btn:hover { color: #fff; background: #3d5166; }
+    .back-btn.visible { display: inline-block; }
+
+    .logo { font-weight: 600; font-size: 14px; }
+
+    .phase-tabs { display: flex; gap: 4px; margin-left: 8px; }
+
+    .phase-tab {
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #aaa;
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .phase-tab:hover { color: #fff; background: #3d5166; }
+    .phase-tab.active { color: #fff; background: #3498db; }
+
+    .spacer { flex: 1; }
+
+    .top-actions { display: flex; gap: 8px; }
+
+    .top-actions button {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: #3d5166;
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .top-actions button:hover { background: #4a6278; }
+    .top-actions button.primary { background: #3498db; border-color: #3498db; }
+
+    /* Main Layout */
+    .main-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Navigation Panel */
+    .nav-panel {
+      width: 180px;
+      background: #f5f6fa;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .nav-section { border-bottom: 1px solid #ddd; }
+
+    .nav-section-header {
+      padding: 10px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      background: #ebedf2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-section-count {
+      font-size: 10px;
+      padding: 2px 6px;
+      background: #ddd;
+      border-radius: 8px;
+      color: #666;
+    }
+
+    .nav-list { max-height: 200px; overflow-y: auto; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #555;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-item:hover { background: #e0e4ed; }
+    .nav-item.active { background: #3498db; color: #fff; border-left-color: #2980b9; }
+
+    .nav-item-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .nav-item-status.checked { background: #27ae60; }
+    .nav-item-status.unchecked { background: transparent; border: 1px solid #aaa; }
+
+    .nav-item-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav-item-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      background: #e9ecef;
+      border-radius: 6px;
+      color: #6c757d;
+    }
+
+    .nav-item.active .nav-item-badge { background: rgba(255,255,255,0.3); color: #fff; }
+
+    .nav-section.reports-section.hidden { display: none; }
+
+    /* Middle Panel */
+    .middle-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid #ddd;
+      background: #fff;
+    }
+
+    /* Source Panel */
+    .source-panel { display: flex; flex-direction: column; height: 100%; }
+    .source-panel.hidden { display: none; }
+
+    .source-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #f5f6fa;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+
+    .source-title-area { display: flex; flex-direction: column; gap: 2px; }
+    .source-title { font-weight: 600; font-size: 14px; color: #2c3e50; }
+    .source-subtitle { font-size: 11px; color: #888; }
+
+    .source-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .query-box {
+      background: #f5f6fa;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .query-box-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .query-box-text { font-size: 14px; line-height: 1.5; color: #2c3e50; }
+
+    .source-text-area {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .source-text-area p { margin-bottom: 12px; }
+    .source-text-area p:last-child { margin-bottom: 0; }
+
+    .quote-highlight {
+      border-bottom: 2px solid;
+      padding-bottom: 1px;
+    }
+    .quote-highlight.must { border-color: #28a745; background: rgba(40, 167, 69, 0.1); }
+    .quote-highlight.should { border-color: #ffc107; background: rgba(255, 193, 7, 0.1); }
+    .quote-highlight.avoid { border-color: #dc3545; background: rgba(220, 53, 69, 0.1); }
+    .quote-highlight.inactive { border-color: transparent; background: transparent; }
+
+    .selection-prompt {
+      display: none;
+      position: fixed;
+      background: #fff;
+      border: 1px solid #3498db;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #3498db;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 100;
+    }
+
+    .selection-prompt:hover { background: #3498db; color: #fff; }
+    .selection-prompt.visible { display: block; }
+
+    /* Ranking Panel */
+    .ranking-panel { display: none; flex-direction: column; height: 100%; }
+    .ranking-panel.visible { display: flex; }
+
+    .ranking-header {
+      padding: 10px 16px;
+      background: #f5f6fa;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+
+    .ranking-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ranking-title { font-weight: 600; font-size: 14px; color: #2c3e50; }
+
+    .ranking-toggle { display: none; gap: 4px; }
+    .ranking-toggle.visible { display: flex; }
+
+    .ranking-toggle button {
+      padding: 4px 10px;
+      border: 1px solid #ccc;
+      background: #fff;
+      color: #555;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .ranking-toggle button.active { background: #2c3e50; border-color: #2c3e50; color: #fff; }
+
+    .metrics-bar { display: none; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+    .metrics-bar.visible { display: flex; }
+
+    .metric-item { text-align: center; }
+    .metric-value { font-size: 18px; font-weight: 600; color: #2c3e50; }
+    .metric-label { font-size: 10px; color: #888; text-transform: uppercase; }
+
+    .ranking-list { flex: 1; overflow-y: auto; }
+
+    .ranking-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    .ranking-item:hover { background: #f5f6fa; }
+    .ranking-item.selected { background: #e8f4fc; border-left: 3px solid #3498db; padding-left: 13px; }
+
+    .ranking-position { font-size: 12px; font-weight: 600; color: #888; width: 24px; flex-shrink: 0; }
+    .ranking-info { flex: 1; min-width: 0; }
+    .ranking-name { font-size: 12px; color: #2c3e50; font-weight: 500; }
+    .ranking-summary { font-size: 10px; color: #888; margin-top: 2px; }
+    .ranking-score { font-size: 13px; font-weight: 500; color: #555; flex-shrink: 0; }
+
+    /* Nuggets Panel */
+    .nuggets-panel {
+      width: 380px;
+      background: #f5f6fa;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .nuggets-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: #ebedf2;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+
+    .nuggets-title { font-size: 12px; font-weight: 600; color: #2c3e50; }
+    .nuggets-context { font-size: 11px; color: #3498db; font-weight: 500; }
+
+    .new-nugget-btn {
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #3498db;
+      background: #fff;
+      color: #3498db;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .new-nugget-btn:hover { background: #3498db; color: #fff; }
+    .new-nugget-btn.hidden { display: none; }
+
+    .solo-mode-bar {
+      display: none;
+      padding: 6px 12px;
+      background: #e8f4fc;
+      border-bottom: 1px solid #bee5eb;
+      font-size: 11px;
+      color: #3498db;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .solo-mode-bar.visible { display: flex; }
+
+    .unsolo-btn {
+      padding: 3px 8px;
+      font-size: 10px;
+      border: 1px solid #3498db;
+      background: #fff;
+      color: #3498db;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .unsolo-btn:hover { background: #3498db; color: #fff; }
+
+    .nuggets-list { flex: 1; overflow-y: auto; }
+
+    /* Draft card */
+    .draft-card {
+      display: none;
+      background: #fff;
+      border: 2px solid #3498db;
+      border-radius: 6px;
+      margin: 8px;
+      padding: 10px;
+    }
+
+    .draft-card.visible { display: block; }
+
+    .draft-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .draft-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #3498db; }
+
+    .draft-close {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: #888;
+      cursor: pointer;
+    }
+
+    .draft-close:hover { color: #333; }
+
+    .draft-section { margin-bottom: 10px; }
+
+    .draft-label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .draft-textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      resize: vertical;
+      min-height: 50px;
+      font-family: inherit;
+    }
+
+    .draft-textarea:focus { outline: none; border-color: #3498db; }
+
+    .draft-spans {
+      min-height: 30px;
+      border: 1px dashed #ddd;
+      border-radius: 4px;
+      padding: 6px;
+      font-size: 11px;
+      color: #888;
+    }
+
+    .draft-spans.has-spans { border-style: solid; color: #333; }
+
+    .span-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #f5f6fa;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 10px;
+      margin: 2px;
+    }
+
+    .span-chip-remove { cursor: pointer; color: #888; }
+    .span-chip-remove:hover { color: #dc3545; }
+
+    .draft-category { display: flex; gap: 4px; }
+
+    .category-btn {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #555;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 500;
+      border-radius: 4px;
+    }
+
+    .category-btn:hover { border-color: #aaa; }
+    .category-btn.must.active { background: #d4edda; border-color: #28a745; color: #155724; }
+    .category-btn.should.active { background: #fff3cd; border-color: #ffc107; color: #856404; }
+    .category-btn.avoid.active { background: #f8d7da; border-color: #dc3545; color: #721c24; }
+
+    .draft-actions {
+      display: flex;
+      gap: 6px;
+      padding-top: 8px;
+      border-top: 1px solid #eee;
+    }
+
+    .draft-actions button {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .draft-actions .cancel { color: #888; }
+    .draft-actions .impact { color: #3498db; border-color: #3498db; }
+    .draft-actions .impact:disabled { color: #aaa; border-color: #ddd; cursor: not-allowed; }
+    .draft-actions .commit { background: #28a745; border-color: #28a745; color: #fff; }
+    .draft-actions .commit:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; }
+
+    /* Canonicalize step */
+    .draft-canonicalize {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .canonicalize-btn {
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid #3498db;
+      background: #fff;
+      color: #3498db;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .canonicalize-btn:hover:not(:disabled) { background: #3498db; color: #fff; }
+    .canonicalize-btn:disabled { color: #aaa; border-color: #ddd; cursor: not-allowed; background: #f5f5f5; }
+    .canonicalize-btn.done { background: #28a745; border-color: #28a745; color: #fff; }
+
+    /* Progress bar for LLM operations */
+    .progress-btn {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-btn.loading {
+      color: transparent !important;
+      pointer-events: none;
+    }
+
+    .progress-btn.loading::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(52,152,219,0.3) 0%, rgba(52,152,219,0.6) 50%, rgba(52,152,219,0.3) 100%);
+      animation: progress-fill 1.5s ease-in-out forwards;
+    }
+
+    @keyframes progress-fill {
+      0% { width: 0%; }
+      80% { width: 85%; }
+      100% { width: 100%; }
+    }
+
+    .progress-btn.loading .btn-text { visibility: hidden; }
+
+    .progress-btn .progress-indicator {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      color: #3498db;
+    }
+
+    .progress-btn.loading .progress-indicator { display: block; }
+
+    .canonicalize-hint { font-size: 10px; color: #888; }
+
+    .draft-freetext { min-height: 40px; }
+
+    .draft-nugget-text { min-height: 50px; }
+    .draft-nugget-text:disabled { background: #f9f9f9; color: #888; }
+    .draft-nugget-text.populated { background: #fff; color: #333; }
+
+    /* Impact preview - Quote-focused */
+    .impact-preview {
+      display: none;
+      margin-top: 8px;
+      padding: 8px;
+      background: #f5f6fa;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    .impact-preview.visible { display: block; }
+
+    .impact-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .impact-title { font-weight: 600; color: #555; }
+    .impact-count { color: #888; }
+
+    .impact-quotes { max-height: 150px; overflow-y: auto; }
+
+    .impact-quote-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px;
+      margin-bottom: 4px;
+      background: #fff;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .impact-quote-item:hover { border-color: #3498db; }
+    .impact-quote-item.current { border-color: #3498db; background: #e8f4fc; }
+
+    .impact-quote-source {
+      font-size: 10px;
+      color: #3498db;
+      font-weight: 500;
+    }
+
+    .impact-quote-text {
+      font-size: 11px;
+      color: #555;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Category sections */
+    .category-section { border-bottom: 1px solid #ddd; }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: #fff;
+      gap: 8px;
+    }
+
+    .category-name { font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .category-name.must { color: #28a745; }
+    .category-name.should { color: #856404; }
+    .category-name.avoid { color: #dc3545; }
+
+    .category-spacer { flex: 1; }
+
+    .category-weight-group { display: none; align-items: center; gap: 4px; }
+    .category-weight-group.visible { display: flex; }
+
+    .category-weight-label { font-size: 10px; color: #888; }
+
+    .category-weight {
+      width: 50px;
+      padding: 2px 6px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .category-nuggets { max-height: 200px; overflow-y: auto; }
+
+    /* Nugget row */
+    .nugget-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      gap: 6px;
+      font-size: 12px;
+      background: #fff;
+    }
+
+    .nugget-row:last-child { border-bottom: none; }
+    .nugget-row.disabled { opacity: 0.4; }
+    .nugget-row.soloed { background: #e8f4fc; }
+
+    .qc-controls { display: none; align-items: center; gap: 4px; flex-shrink: 0; }
+    .qc-controls.visible { display: flex; }
+
+    .solo-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid #aaa;
+      background: #fff;
+      color: #888;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .solo-btn:hover { border-color: #3498db; color: #3498db; }
+    .solo-btn.active { background: #3498db; border-color: #3498db; color: #fff; }
+
+    .nugget-checkbox { width: 14px; height: 14px; cursor: pointer; }
+
+    .nugget-content { flex: 1; min-width: 0; }
+    .nugget-text { line-height: 1.4; color: #333; margin-bottom: 4px; }
+
+    .nugget-global { display: flex; align-items: center; gap: 8px; }
+
+    .coverage-bar-container { display: flex; align-items: center; gap: 4px; }
+
+    .coverage-bar {
+      width: 40px;
+      height: 4px;
+      background: #ddd;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .coverage-bar-fill { height: 100%; border-radius: 2px; background: #888; }
+
+    .coverage-label { font-size: 10px; color: #888; white-space: nowrap; }
+
+    .edit-btn {
+      padding: 2px 6px;
+      font-size: 10px;
+      color: #888;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .edit-btn:hover { background: #f0f0f0; color: #555; }
+    .edit-btn.hidden { display: none; }
+
+    .nugget-report { display: none; align-items: center; gap: 6px; margin-left: 8px; padding-left: 8px; border-left: 1px solid #ddd; }
+    .nugget-report.visible { display: flex; }
+
+    .verdict-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .verdict-icon.satisfied { background: #d4edda; color: #155724; }
+    .verdict-icon.partial { background: #fff3cd; color: #856404; }
+    .verdict-icon.not-satisfied { background: #f8d7da; color: #721c24; }
+
+    .verdict-source { font-size: 10px; color: #555; white-space: nowrap; }
+
+    .quote-btn {
+      padding: 2px 6px;
+      font-size: 10px;
+      color: #555;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .quote-btn:hover { background: #f0f0f0; }
+    .quote-btn.active { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+  </style>
+</head>
+<body>
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <button class="back-btn" id="backBtn" onclick="goBack()">&larr; Back</button>
+    <span class="logo">Nugget Annotator</span>
+
+    <div class="phase-tabs">
+      <button class="phase-tab active" id="tab-creation" onclick="setPhase('creation')">Creation</button>
+      <button class="phase-tab" id="tab-qc" onclick="setPhase('qc')">QC</button>
+      <button class="phase-tab" id="tab-observe" onclick="setPhase('observe')">Observe</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="top-actions">
+      <button>Export</button>
+      <button class="primary">Grade All</button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="main-container">
+    <!-- Navigation Panel -->
+    <div class="nav-panel">
+      <div class="nav-section">
+        <div class="nav-section-header">
+          Queries
+          <span class="nav-section-count">3/25</span>
+        </div>
+        <div class="nav-list">
+          <div class="nav-item">
+            <span class="nav-item-status checked"></span>
+            <span class="nav-item-label">Q1: Cloud migration...</span>
+            <span class="nav-item-badge">8</span>
+          </div>
+          <div class="nav-item active">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">Q3: Security incident...</span>
+            <span class="nav-item-badge">4</span>
+          </div>
+          <div class="nav-item">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">Q4: Performance...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-section reports-section" id="reportsSection">
+        <div class="nav-section-header">
+          Reports
+          <span class="nav-section-count">5</span>
+        </div>
+        <div class="nav-list" id="reportsNav">
+          <div class="nav-item active" data-report="alpha">
+            <span class="nav-item-status checked"></span>
+            <span class="nav-item-label">team-alpha/run-1</span>
+          </div>
+          <div class="nav-item" data-report="beta">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">team-beta/run-2</span>
+          </div>
+          <div class="nav-item" data-report="gamma">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">team-gamma/run-1</span>
+          </div>
+          <div class="nav-item" data-report="delta">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">team-delta/run-3</span>
+          </div>
+          <div class="nav-item" data-report="epsilon">
+            <span class="nav-item-status unchecked"></span>
+            <span class="nav-item-label">team-epsilon/run-1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle Panel -->
+    <div class="middle-panel">
+      <!-- Source Panel -->
+      <div class="source-panel" id="sourcePanel">
+        <div class="source-header">
+          <div class="source-title-area">
+            <div class="source-title" id="sourceTitle">team-alpha / run-1</div>
+            <div class="source-subtitle">Response for Q3</div>
+          </div>
+        </div>
+
+        <div class="source-content">
+          <div class="query-box">
+            <div class="query-box-label">Query</div>
+            <div class="query-box-text">What caused the 2024 security incident at Acme Corp and what mitigation steps are recommended?</div>
+          </div>
+
+          <div class="source-text-area" id="sourceText">
+            <p>
+              Based on our comprehensive analysis of the available evidence, the security incident at Acme Corp was primarily caused by
+              <span class="quote-highlight must" data-nugget="n1">a misconfigured firewall rule that allowed unauthorized access</span>
+              to the internal network segment. This critical configuration error inadvertently exposed several internal systems.
+            </p>
+            <p>
+              The vulnerability has been formally assigned
+              <span class="quote-highlight should" data-nugget="n2">CVE-2024-1234</span>
+              and affects software versions 2.0 through 2.5 inclusive.
+            </p>
+            <p>
+              Based on industry best practices, we recommend the following mitigation steps:
+              <span class="quote-highlight should inactive" data-nugget="n3">Apply the latest security patches immediately and implement network segmentation</span>
+              to limit the potential blast radius of future breaches.
+            </p>
+            <p>
+              It is important to note that there is currently no confirmed evidence that this vulnerability was actively exploited in the wild.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ranking Panel -->
+      <div class="ranking-panel" id="rankingPanel">
+        <div class="ranking-header">
+          <div class="ranking-header-top">
+            <span class="ranking-title">System Ranking</span>
+            <div class="ranking-toggle" id="rankingToggle">
+              <button class="active">All Queries</button>
+              <button>Q3 Only</button>
+            </div>
+          </div>
+          <div class="metrics-bar" id="metricsBar">
+            <div class="metric-item">
+              <div class="metric-value">0.54</div>
+              <div class="metric-label">Avg</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-value">0.92</div>
+              <div class="metric-label">Max</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-value">12%</div>
+              <div class="metric-label">Full</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ranking-list" id="rankingList">
+          <div class="ranking-item" data-report="alpha" onclick="selectReportFromRanking('alpha')">
+            <span class="ranking-position">1.</span>
+            <div class="ranking-info">
+              <div class="ranking-name">team-alpha/run-1</div>
+              <div class="ranking-summary">4/4 nuggets</div>
+            </div>
+            <span class="ranking-score">0.92</span>
+          </div>
+          <div class="ranking-item" data-report="beta" onclick="selectReportFromRanking('beta')">
+            <span class="ranking-position">2.</span>
+            <div class="ranking-info">
+              <div class="ranking-name">team-beta/run-2</div>
+              <div class="ranking-summary">3/4 (+1 partial)</div>
+            </div>
+            <span class="ranking-score">0.78</span>
+          </div>
+          <div class="ranking-item" data-report="gamma" onclick="selectReportFromRanking('gamma')">
+            <span class="ranking-position">3.</span>
+            <div class="ranking-info">
+              <div class="ranking-name">team-gamma/run-1</div>
+              <div class="ranking-summary">2/4 (+1 partial)</div>
+            </div>
+            <span class="ranking-score">0.54</span>
+          </div>
+          <div class="ranking-item" data-report="delta" onclick="selectReportFromRanking('delta')">
+            <span class="ranking-position">4.</span>
+            <div class="ranking-info">
+              <div class="ranking-name">team-delta/run-3</div>
+              <div class="ranking-summary">1/4 (+1 partial)</div>
+            </div>
+            <span class="ranking-score">0.28</span>
+          </div>
+          <div class="ranking-item" data-report="epsilon" onclick="selectReportFromRanking('epsilon')">
+            <span class="ranking-position">5.</span>
+            <div class="ranking-info">
+              <div class="ranking-name">team-epsilon/run-1</div>
+              <div class="ranking-summary">1/4</div>
+            </div>
+            <span class="ranking-score">0.18</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nuggets Panel -->
+    <div class="nuggets-panel">
+      <div class="nuggets-header">
+        <div>
+          <span class="nuggets-title">Nuggets (4)</span>
+          <span class="nuggets-context" id="nuggetsContext"></span>
+        </div>
+        <button class="new-nugget-btn" id="newNuggetBtn" onclick="showDraft()">+ Nugget</button>
+      </div>
+
+      <div class="solo-mode-bar" id="soloModeBar">
+        <span>Solo mode active</span>
+        <button class="unsolo-btn" onclick="unsoloAll()">Unsolo</button>
+      </div>
+
+      <div class="nuggets-list">
+        <!-- Draft Card -->
+        <div class="draft-card" id="draftCard">
+          <div class="draft-header">
+            <span class="draft-title">New Nugget</span>
+            <button class="draft-close" onclick="hideDraft()">&times;</button>
+          </div>
+
+          <!-- Step 1: Collect evidence -->
+          <div class="draft-section">
+            <div class="draft-label">1. Spans (select text in source)</div>
+            <div class="draft-spans" id="draftSpans">
+              Select text from the report to add supporting quotes...
+            </div>
+          </div>
+
+          <div class="draft-section">
+            <div class="draft-label">Freetext Notes</div>
+            <textarea class="draft-textarea draft-freetext" id="draftFreetext" placeholder="Notes about what this nugget should capture..."></textarea>
+          </div>
+
+          <!-- Step 2: Canonicalize -->
+          <div class="draft-section">
+            <div class="draft-label">2. Nugget Candidate</div>
+            <div class="draft-canonicalize">
+              <button class="canonicalize-btn" id="canonicalizeBtn" onclick="canonicalize()">Canonicalize</button>
+              <span class="canonicalize-hint">Generate nugget from spans + notes</span>
+            </div>
+            <textarea class="draft-textarea draft-nugget-text" id="draftNuggetText" placeholder="Canonicalized nugget statement will appear here..." disabled></textarea>
+          </div>
+
+          <div class="draft-section">
+            <div class="draft-label">Category</div>
+            <div class="draft-category">
+              <button class="category-btn must active" onclick="setDraftCategory(this, 'must')">Must Have</button>
+              <button class="category-btn should" onclick="setDraftCategory(this, 'should')">Should Have</button>
+              <button class="category-btn avoid" onclick="setDraftCategory(this, 'avoid')">Avoid</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Impact Preview - Quote focused -->
+          <div class="impact-preview" id="impactPreview">
+            <div class="impact-header">
+              <span class="impact-title">Matching Quotes</span>
+              <span class="impact-count">38/50 reports</span>
+            </div>
+            <div class="impact-quotes">
+              <div class="impact-quote-item current" onclick="navigateToQuote('alpha')">
+                <span class="impact-quote-source">team-alpha/run-1 (current)</span>
+                <span class="impact-quote-text">"...a misconfigured firewall rule that allowed unauthorized access to the internal network segment..."</span>
+              </div>
+              <div class="impact-quote-item" onclick="navigateToQuote('beta')">
+                <span class="impact-quote-source">team-beta/run-2</span>
+                <span class="impact-quote-text">"The firewall misconfiguration was the primary attack vector enabling lateral movement..."</span>
+              </div>
+              <div class="impact-quote-item" onclick="navigateToQuote('gamma')">
+                <span class="impact-quote-source">team-gamma/run-1</span>
+                <span class="impact-quote-text">"A firewall rule error exposed internal systems to external threats..."</span>
+              </div>
+              <div class="impact-quote-item" onclick="navigateToQuote('delta')">
+                <span class="impact-quote-source">team-delta/run-3</span>
+                <span class="impact-quote-text">"Misconfigured firewall settings were identified as the root cause..."</span>
+              </div>
+              <div class="impact-quote-item" onclick="navigateToQuote('epsilon')">
+                <span class="impact-quote-source">team-epsilon/run-1</span>
+                <span class="impact-quote-text">"The incident traced back to improper firewall configuration..."</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="draft-actions">
+            <button class="cancel" onclick="hideDraft()">Cancel</button>
+            <button class="impact" onclick="checkImpact()" id="impactBtn" disabled>Check Impact</button>
+            <button class="commit" onclick="commitNugget()" id="commitBtn" disabled>Commit</button>
+          </div>
+        </div>
+
+        <!-- Must Have Category -->
+        <div class="category-section">
+          <div class="category-header">
+            <span class="category-name must">Must Have</span>
+            <span class="category-spacer"></span>
+            <div class="category-weight-group" id="weightMust">
+              <span class="category-weight-label">Weight:</span>
+              <input type="number" class="category-weight" value="3.0" step="0.5" min="0" max="10">
+            </div>
+          </div>
+          <div class="category-nuggets">
+            <div class="nugget-row" id="nugget-n1">
+              <div class="qc-controls" id="qc-n1">
+                <button class="solo-btn" onclick="toggleSolo('n1')">&middot;</button>
+                <input type="checkbox" class="nugget-checkbox" checked onchange="toggleNugget('n1')">
+              </div>
+              <div class="nugget-content">
+                <div class="nugget-text">The system correctly identifies the primary cause of the incident as a misconfigured firewall rule.</div>
+                <div class="nugget-global">
+                  <div class="coverage-bar-container">
+                    <div class="coverage-bar"><div class="coverage-bar-fill" style="width: 84%"></div></div>
+                    <span class="coverage-label">42/50</span>
+                  </div>
+                  <button class="edit-btn" id="edit-n1">Edit</button>
+                  <div class="nugget-report" id="report-n1">
+                    <span class="verdict-icon satisfied">&#10003;</span>
+                    <span class="verdict-source">R+2</span>
+                    <button class="quote-btn active" data-nugget="n1" onclick="toggleQuote('n1')">Quote</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Should Have Category -->
+        <div class="category-section">
+          <div class="category-header">
+            <span class="category-name should">Should Have</span>
+            <span class="category-spacer"></span>
+            <div class="category-weight-group" id="weightShould">
+              <span class="category-weight-label">Weight:</span>
+              <input type="number" class="category-weight" value="1.5" step="0.5" min="0" max="10">
+            </div>
+          </div>
+          <div class="category-nuggets">
+            <div class="nugget-row" id="nugget-n2">
+              <div class="qc-controls" id="qc-n2">
+                <button class="solo-btn" onclick="toggleSolo('n2')">&middot;</button>
+                <input type="checkbox" class="nugget-checkbox" checked onchange="toggleNugget('n2')">
+              </div>
+              <div class="nugget-content">
+                <div class="nugget-text">References the specific CVE number (CVE-2024-1234) associated with the vulnerability.</div>
+                <div class="nugget-global">
+                  <div class="coverage-bar-container">
+                    <div class="coverage-bar"><div class="coverage-bar-fill" style="width: 96%"></div></div>
+                    <span class="coverage-label">48/50</span>
+                  </div>
+                  <button class="edit-btn" id="edit-n2">Edit</button>
+                  <div class="nugget-report" id="report-n2">
+                    <span class="verdict-icon satisfied">&#10003;</span>
+                    <span class="verdict-source">R</span>
+                    <button class="quote-btn active" data-nugget="n2" onclick="toggleQuote('n2')">Quote</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="nugget-row" id="nugget-n3">
+              <div class="qc-controls" id="qc-n3">
+                <button class="solo-btn" onclick="toggleSolo('n3')">&middot;</button>
+                <input type="checkbox" class="nugget-checkbox" checked onchange="toggleNugget('n3')">
+              </div>
+              <div class="nugget-content">
+                <div class="nugget-text">Mentions the recommended mitigation steps including patching and network segmentation.</div>
+                <div class="nugget-global">
+                  <div class="coverage-bar-container">
+                    <div class="coverage-bar"><div class="coverage-bar-fill" style="width: 76%"></div></div>
+                    <span class="coverage-label">38/50</span>
+                  </div>
+                  <button class="edit-btn" id="edit-n3">Edit</button>
+                  <div class="nugget-report" id="report-n3">
+                    <span class="verdict-icon partial">~</span>
+                    <span class="verdict-source">R</span>
+                    <button class="quote-btn" data-nugget="n3" onclick="toggleQuote('n3')">Quote</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Avoid Category -->
+        <div class="category-section">
+          <div class="category-header">
+            <span class="category-name avoid">Avoid</span>
+            <span class="category-spacer"></span>
+            <div class="category-weight-group" id="weightAvoid">
+              <span class="category-weight-label">Weight:</span>
+              <input type="number" class="category-weight" value="-2.0" step="0.5" min="-10" max="0">
+            </div>
+          </div>
+          <div class="category-nuggets">
+            <div class="nugget-row" id="nugget-n4">
+              <div class="qc-controls" id="qc-n4">
+                <button class="solo-btn" onclick="toggleSolo('n4')">&middot;</button>
+                <input type="checkbox" class="nugget-checkbox" checked onchange="toggleNugget('n4')">
+              </div>
+              <div class="nugget-content">
+                <div class="nugget-text">Claims the vulnerability was exploited in the wild without evidence.</div>
+                <div class="nugget-global">
+                  <div class="coverage-bar-container">
+                    <div class="coverage-bar"><div class="coverage-bar-fill" style="width: 6%"></div></div>
+                    <span class="coverage-label">3/50</span>
+                  </div>
+                  <button class="edit-btn" id="edit-n4">Edit</button>
+                  <div class="nugget-report" id="report-n4">
+                    <span class="verdict-icon not-satisfied">&#10007;</span>
+                    <span class="verdict-source"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selection Prompt -->
+  <div class="selection-prompt" id="selectionPrompt">+ Add as span</div>
+
+  <script>
+    let currentPhase = 'creation';
+    let selectedReport = 'alpha';
+    let soloNugget = null;
+
+    // Navigation history
+    const navHistory = [];
+
+    const reportNames = {
+      alpha: 'team-alpha / run-1',
+      beta: 'team-beta / run-2',
+      gamma: 'team-gamma / run-1',
+      delta: 'team-delta / run-3',
+      epsilon: 'team-epsilon / run-1'
+    };
+
+    function pushHistory() {
+      navHistory.push({ phase: currentPhase, report: selectedReport });
+      updateBackButton();
+    }
+
+    function updateBackButton() {
+      document.getElementById('backBtn').classList.toggle('visible', navHistory.length > 0);
+    }
+
+    function goBack() {
+      if (navHistory.length === 0) return;
+      const prev = navHistory.pop();
+      updateBackButton();
+
+      // Restore previous state without pushing to history
+      currentPhase = prev.phase;
+      selectedReport = prev.report;
+
+      document.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + currentPhase).classList.add('active');
+
+      applyPhase();
+      selectReportSilent(selectedReport);
+    }
+
+    function setPhase(phase) {
+      if (phase !== currentPhase) {
+        pushHistory();
+      }
+      currentPhase = phase;
+
+      document.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + phase).classList.add('active');
+
+      applyPhase();
+    }
+
+    function applyPhase() {
+      const isCreation = currentPhase === 'creation';
+      const isQC = currentPhase === 'qc';
+      const isObserve = currentPhase === 'observe';
+
+      document.getElementById('sourcePanel').classList.toggle('hidden', !isCreation);
+      document.getElementById('rankingPanel').classList.toggle('visible', isQC || isObserve);
+      document.getElementById('reportsSection').classList.toggle('hidden', !isCreation);
+
+      document.querySelectorAll('.qc-controls').forEach(el => el.classList.toggle('visible', isQC));
+      // Show weights in both QC and Observe, but read-only in Observe
+      document.querySelectorAll('.category-weight-group').forEach(el => el.classList.toggle('visible', isQC || isObserve));
+      document.querySelectorAll('.category-weight').forEach(el => {
+        el.disabled = isObserve;
+        el.style.opacity = isObserve ? '0.7' : '1';
+      });
+      document.querySelectorAll('.nugget-report').forEach(el => el.classList.toggle('visible', isCreation && selectedReport));
+      document.querySelectorAll('.edit-btn').forEach(el => el.classList.toggle('hidden', isObserve));
+      document.getElementById('newNuggetBtn').classList.toggle('hidden', isObserve);
+      document.getElementById('rankingToggle').classList.toggle('visible', isObserve);
+      document.getElementById('metricsBar').classList.toggle('visible', isObserve);
+
+      updateNuggetsContext();
+    }
+
+    function updateNuggetsContext() {
+      const ctx = document.getElementById('nuggetsContext');
+      if (currentPhase === 'creation' && selectedReport) {
+        ctx.textContent = ' — ' + reportNames[selectedReport];
+      } else {
+        ctx.textContent = '';
+      }
+    }
+
+    function selectReport(reportId) {
+      if (reportId !== selectedReport) {
+        pushHistory();
+      }
+      selectReportSilent(reportId);
+    }
+
+    function selectReportSilent(reportId) {
+      selectedReport = reportId;
+      document.getElementById('sourceTitle').textContent = reportNames[reportId];
+
+      document.querySelectorAll('#reportsNav .nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.report === reportId);
+      });
+
+      document.querySelectorAll('.nugget-report').forEach(el => el.classList.add('visible'));
+      updateNuggetsContext();
+    }
+
+    function selectReportFromRanking(reportId) {
+      pushHistory();
+      selectedReport = reportId;
+      currentPhase = 'creation';
+
+      document.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-creation').classList.add('active');
+
+      applyPhase();
+      selectReportSilent(reportId);
+    }
+
+    function navigateToQuote(reportId) {
+      // From impact preview, navigate to that report
+      selectReportFromRanking(reportId);
+      hideDraft();
+    }
+
+    // Nugget draft
+    function showDraft() {
+      document.getElementById('draftCard').classList.add('visible');
+      document.getElementById('impactPreview').classList.remove('visible');
+    }
+
+    function hideDraft() {
+      document.getElementById('draftCard').classList.remove('visible');
+      document.getElementById('draftFreetext').value = '';
+      document.getElementById('draftNuggetText').value = '';
+      document.getElementById('draftNuggetText').disabled = true;
+      document.getElementById('draftNuggetText').classList.remove('populated');
+      document.getElementById('draftSpans').innerHTML = 'Select text from the report to add supporting quotes...';
+      document.getElementById('draftSpans').classList.remove('has-spans');
+      document.getElementById('impactPreview').classList.remove('visible');
+      document.getElementById('canonicalizeBtn').classList.remove('done');
+      document.getElementById('canonicalizeBtn').disabled = false;
+      document.getElementById('canonicalizeBtn').textContent = 'Canonicalize';
+      document.getElementById('impactBtn').disabled = true;
+      document.getElementById('commitBtn').disabled = true;
+    }
+
+    function setDraftCategory(btn, category) {
+      document.querySelectorAll('.draft-category .category-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function toggleImpact() {
+      document.getElementById('impactPreview').classList.toggle('visible');
+    }
+
+    // Progress bar simulation for LLM operations
+    function simulateLLMOperation(btn, duration, callback) {
+      btn.classList.add('loading');
+      setTimeout(() => {
+        btn.classList.remove('loading');
+        if (callback) callback();
+      }, duration);
+    }
+
+    // Canonicalize: generate nugget candidate from spans + freetext
+    function canonicalize() {
+      const spansEl = document.getElementById('draftSpans');
+      const freetext = document.getElementById('draftFreetext').value.trim();
+      const nuggetTextEl = document.getElementById('draftNuggetText');
+      const canonBtn = document.getElementById('canonicalizeBtn');
+
+      // Collect span text if any
+      const spanChips = spansEl.querySelectorAll('.span-chip');
+      let spanText = '';
+      spanChips.forEach(chip => {
+        // Extract text content (excluding the remove button)
+        const text = chip.childNodes[0].textContent.trim();
+        spanText += text + ' ';
+      });
+
+      // Show progress bar during LLM call
+      simulateLLMOperation(canonBtn, 1500, () => {
+        // Simulate LLM canonicalization result
+        let canonicalized = '';
+        if (spanText || freetext) {
+          if (freetext) {
+            canonicalized = 'The response should ' + freetext.toLowerCase();
+            if (!canonicalized.endsWith('.')) canonicalized += '.';
+          } else if (spanText) {
+            canonicalized = 'The response mentions: ' + spanText.trim();
+            if (!canonicalized.endsWith('.')) canonicalized += '.';
+          }
+        } else {
+          canonicalized = 'Please add spans or notes to generate a nugget candidate.';
+        }
+
+        // Show result
+        nuggetTextEl.value = canonicalized;
+        nuggetTextEl.disabled = false;
+        nuggetTextEl.classList.add('populated');
+
+        // Update button state
+        canonBtn.classList.add('done');
+        canonBtn.textContent = 'Re-canonicalize';
+
+        // Enable impact and commit buttons
+        document.getElementById('impactBtn').disabled = false;
+        document.getElementById('commitBtn').disabled = false;
+      });
+    }
+
+    // Check impact: show matching quotes across reports
+    function checkImpact() {
+      const nuggetText = document.getElementById('draftNuggetText').value;
+      if (!nuggetText) return;
+
+      const impactBtn = document.getElementById('impactBtn');
+      simulateLLMOperation(impactBtn, 1200, () => {
+        // Show the impact preview (with mock data already in HTML)
+        document.getElementById('impactPreview').classList.add('visible');
+      });
+    }
+
+    function commitNugget() {
+      alert('Nugget committed!');
+      hideDraft();
+    }
+
+    // Text selection
+    const selectionPrompt = document.getElementById('selectionPrompt');
+
+    document.getElementById('sourceText').addEventListener('mouseup', function(e) {
+      const selection = window.getSelection();
+      const text = selection.toString().trim();
+
+      if (text.length > 0 && document.getElementById('draftCard').classList.contains('visible')) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selectionPrompt.style.left = rect.left + (rect.width / 2) - 50 + 'px';
+        selectionPrompt.style.top = rect.bottom + 8 + 'px';
+        selectionPrompt.classList.add('visible');
+      } else {
+        selectionPrompt.classList.remove('visible');
+      }
+    });
+
+    selectionPrompt.addEventListener('click', function() {
+      const selection = window.getSelection();
+      const text = selection.toString().trim();
+      if (text) {
+        const spansEl = document.getElementById('draftSpans');
+        const shortText = text.length > 40 ? text.substring(0, 40) + '...' : text;
+        spansEl.innerHTML = `<span class="span-chip">"${shortText}" <span class="span-chip-remove" onclick="removeSpan(this)">&times;</span></span>`;
+        spansEl.classList.add('has-spans');
+        selection.removeAllRanges();
+        selectionPrompt.classList.remove('visible');
+      }
+    });
+
+    function removeSpan(el) {
+      const spansEl = document.getElementById('draftSpans');
+      spansEl.innerHTML = 'Select text from the report to add supporting quotes...';
+      spansEl.classList.remove('has-spans');
+    }
+
+    // Quote toggle
+    function toggleQuote(nuggetId) {
+      const btn = document.querySelector(`.quote-btn[data-nugget="${nuggetId}"]`);
+      const highlight = document.querySelector(`.quote-highlight[data-nugget="${nuggetId}"]`);
+
+      btn.classList.toggle('active');
+      if (highlight) {
+        highlight.classList.toggle('inactive', !btn.classList.contains('active'));
+      }
+    }
+
+    // Solo/checkbox
+    function toggleSolo(nuggetId) {
+      const row = document.getElementById('nugget-' + nuggetId);
+      const btn = row.querySelector('.solo-btn');
+
+      if (soloNugget === nuggetId) {
+        soloNugget = null;
+        document.querySelectorAll('.solo-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nugget-row').forEach(r => r.classList.remove('soloed', 'disabled'));
+        document.getElementById('soloModeBar').classList.remove('visible');
+      } else {
+        soloNugget = nuggetId;
+        document.querySelectorAll('.solo-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        document.querySelectorAll('.nugget-row').forEach(r => {
+          r.classList.toggle('soloed', r.id === 'nugget-' + nuggetId);
+          r.classList.toggle('disabled', r.id !== 'nugget-' + nuggetId);
+        });
+        document.getElementById('soloModeBar').classList.add('visible');
+      }
+    }
+
+    function unsoloAll() {
+      soloNugget = null;
+      document.querySelectorAll('.solo-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.nugget-row').forEach(r => r.classList.remove('soloed', 'disabled'));
+      document.getElementById('soloModeBar').classList.remove('visible');
+    }
+
+    function toggleNugget(nuggetId) {
+      const row = document.getElementById('nugget-' + nuggetId);
+      const checkbox = row.querySelector('.nugget-checkbox');
+      row.classList.toggle('disabled', !checkbox.checked);
+    }
+
+    // Nav clicks
+    document.querySelectorAll('#reportsNav .nav-item').forEach(item => {
+      item.addEventListener('click', () => selectReport(item.dataset.report));
+    });
+
+    // Initialize
+    applyPhase();
+    updateBackButton();
+  </script>
+</body>
+</html>
