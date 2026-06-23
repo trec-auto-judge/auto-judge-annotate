@@ -6,6 +6,119 @@ JS_LLM = r"""
 var LLM_MODEL = "gpt-oss-120b";
 var llmStatus = "none"; // "none", "ok", "error"
 
+// --- Progress Bar Support for LLM Operations ---
+// Tracks real progress as LLM responses complete (not animations)
+
+var llmProgress = {
+    active: false,
+    buttonEl: null,
+    completed: 0,
+    total: 0,
+    errors: 0
+};
+
+// Start a progress operation on a button
+// buttonEl: the button element to convert to progress indicator
+// total: expected number of LLM calls (may grow if more are queued)
+function startProgressOperation(buttonEl, total) {
+    llmProgress.active = true;
+    llmProgress.buttonEl = buttonEl;
+    llmProgress.completed = 0;
+    llmProgress.total = total || 1;
+    llmProgress.errors = 0;
+
+    if (buttonEl) {
+        buttonEl.classList.add('loading');
+        buttonEl.disabled = true;
+        updateProgressBar();
+    }
+}
+
+// Increment progress by one unit (call after each LLM response completes)
+function incrementProgress() {
+    if (!llmProgress.active) return;
+
+    llmProgress.completed++;
+    updateProgressBar();
+}
+
+// Record an error (still counts as completed for progress purposes)
+function incrementProgressError() {
+    if (!llmProgress.active) return;
+
+    llmProgress.completed++;
+    llmProgress.errors++;
+    updateProgressBar();
+}
+
+// Increase the total expected (when more LLM calls are queued mid-operation)
+function extendProgressTotal(additionalCount) {
+    if (!llmProgress.active) return;
+
+    llmProgress.total += additionalCount;
+    updateProgressBar();
+}
+
+// Update the progress bar CSS variable
+function updateProgressBar() {
+    if (!llmProgress.buttonEl) return;
+
+    var pct = llmProgress.total > 0 ? (llmProgress.completed / llmProgress.total * 100) : 0;
+    llmProgress.buttonEl.style.setProperty('--progress-width', pct + '%');
+
+    // Update progress text if there's a progress indicator span
+    var indicator = llmProgress.buttonEl.querySelector('.progress-indicator');
+    if (indicator) {
+        var text = llmProgress.completed + '/' + llmProgress.total;
+        if (llmProgress.errors > 0) {
+            text += ' (' + llmProgress.errors + ' err)';
+        }
+        indicator.textContent = text;
+    }
+}
+
+// End the progress operation
+function endProgressOperation() {
+    if (!llmProgress.active) return;
+
+    if (llmProgress.buttonEl) {
+        llmProgress.buttonEl.classList.remove('loading');
+        llmProgress.buttonEl.classList.add('done');
+        llmProgress.buttonEl.disabled = false;
+        llmProgress.buttonEl.style.removeProperty('--progress-width');
+
+        // Reset done state after a brief moment
+        var btn = llmProgress.buttonEl;
+        setTimeout(function() {
+            btn.classList.remove('done');
+        }, 1500);
+    }
+
+    llmProgress.active = false;
+    llmProgress.buttonEl = null;
+    llmProgress.completed = 0;
+    llmProgress.total = 0;
+    llmProgress.errors = 0;
+}
+
+// Check if a progress operation is active
+function isProgressActive() {
+    return llmProgress.active;
+}
+
+// Legacy alias for callLLM used by draft card
+function callLLM(prompt, successCallback, errorCallback) {
+    callLlm(prompt).then(function(result) {
+        if (result) {
+            successCallback(result);
+        } else {
+            errorCallback(new Error('LLM returned null'));
+        }
+    }).catch(function(err) {
+        errorCallback(err);
+    });
+}
+
 // Get/set API key from localStorage
 function getLlmApiKey() {
   return localStorage.getItem("openrouter_api_key") || "";
@@ -297,11 +410,12 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
   var report = reportIndex[topicId] && reportIndex[topicId][runId];
   if (!report) return null;
 
-  var passage = report.response_text || "";
-  if (!passage && report.sentences) {
-    // Fallback: join sentences if response_text not available
-    passage = report.sentences.map(function(s) { return s.text; }).join(" ");
+  // Use sentence.text (matches rendered text) for quote extraction
+  var passage = "";
+  if (report.sentences && report.sentences.length > 0) {
+    passage = report.sentences.map(function(s) { return s.text || ""; }).join(" ");
   }
+  if (!passage) passage = report.response_text || "";
 
   if (!passage) {
     return null;
@@ -384,74 +498,84 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
 
 // Extract the contiguous quote from a passage that addresses a question
 // Returns the quote string or null if not found/invalid
+// Uses chunking for long passages, stops at first valid quote found
 async function extractAddressedQuote(question, passage) {
   var systemPrompt = "Extract a contiguous verbatim quote from a passage that addresses a question.";
 
-  var prompt = "## Question\n" + question + "\n\n";
-  prompt += "## Passage\n" + passage.substring(0, 8000) + "\n\n";
-  prompt += "## Task\n";
-  prompt += "Find a SINGLE CONTIGUOUS text span that best supports the answer to the question.\n\n";
-  prompt += "CRITICAL REQUIREMENTS:\n";
-  prompt += "- The quote MUST be a single contiguous span - one unbroken sequence of characters that appears exactly as-is in the passage\n";
-  prompt += "- Do NOT combine sentences from different parts of the passage\n";
-  prompt += "- Do NOT rearrange or reorder text\n";
-  prompt += "- Do NOT include quotation marks around the extracted text\n";
-  prompt += "- Copy the text character-for-character from the passage\n\n";
-  prompt += "If multiple relevant sections exist, choose the SINGLE BEST contiguous span. Do not try to combine them.\n\n";
-  prompt += "Respond with JSON in this exact format:\n";
-  prompt += "{\n";
-  prompt += '  "extracted_quote": "the exact contiguous text from the passage, or null if none found",\n';
-  prompt += '  "confidence": 0.0-1.0\n';
-  prompt += "}\n\n";
-  prompt += "Only respond with the JSON, no other text.";
+  // Chunk the passage for long texts
+  var chunks = typeof chunkPassage === "function" ? chunkPassage(passage) : [{ text: passage.substring(0, 8000), startOffset: 0 }];
 
-  var result = await callLlm(prompt, systemPrompt);
-  if (!result) return null;
+  var normalizeFunc = typeof normalizeForMatching === "function" ? normalizeForMatching : function(t) {
+    return t.replace(/\s+/g, " ").toLowerCase();
+  };
+  var normPassage = normalizeFunc(passage);
 
-  try {
-    var jsonStr = result.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+  // Try each chunk until we find a valid quote
+  for (var ci = 0; ci < chunks.length; ci++) {
+    var chunk = chunks[ci];
+
+    var prompt = "## Question\n" + question + "\n\n";
+    prompt += "## Passage\n" + chunk.text + "\n\n";
+    prompt += "## Task\n";
+    prompt += "Find a SINGLE CONTIGUOUS text span that best supports the answer to the question.\n\n";
+    prompt += "CRITICAL REQUIREMENTS:\n";
+    prompt += "- The quote MUST be a single contiguous span - one unbroken sequence of characters that appears exactly as-is in the passage\n";
+    prompt += "- Do NOT combine sentences from different parts of the passage\n";
+    prompt += "- Do NOT rearrange or reorder text\n";
+    prompt += "- Do NOT include quotation marks around the extracted text\n";
+    prompt += "- Copy the text character-for-character from the passage\n\n";
+    prompt += "If multiple relevant sections exist, choose the SINGLE BEST contiguous span. Do not try to combine them.\n\n";
+    prompt += "Respond with JSON in this exact format:\n";
+    prompt += "{\n";
+    prompt += '  "extracted_quote": "the exact contiguous text from the passage, or null if none found",\n';
+    prompt += '  "confidence": 0.0-1.0\n';
+    prompt += "}\n\n";
+    prompt += "Only respond with the JSON, no other text.";
+
+    var result = await callLlm(prompt, systemPrompt);
+    if (!result) continue;
+
+    try {
+      var jsonStr = result.trim();
+      if (jsonStr.startsWith("```")) {
+        jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      }
+      var parsed = JSON.parse(jsonStr);
+
+      var quote = parsed.extracted_quote;
+      var confidence = parseFloat(parsed.confidence) || 0.5;
+
+      // Normalize empty/none values
+      if (!quote || quote.toLowerCase() === "none" || quote.toLowerCase() === "null" || quote === "n/a") {
+        continue;  // Try next chunk
+      }
+
+      // Scrub the quote to clean up common LLM formatting issues
+      quote = typeof scrubQuote === "function" ? scrubQuote(quote) : quote.trim();
+
+      // Validate: quote must actually exist in the full passage (with Unicode normalization)
+      var normQuote = normalizeFunc(quote);
+      if (!normPassage.includes(normQuote)) {
+        console.warn("Extracted quote not found in passage, trying next chunk:", quote.substring(0, 80) + "...");
+        continue;  // Try next chunk
+      }
+
+      // Only accept if confidence is reasonable
+      if (confidence < 0.2) {
+        console.warn("Quote extraction confidence too low:", confidence);
+        continue;  // Try next chunk
+      }
+
+      // Found a valid quote, return it
+      return quote;
+    } catch (err) {
+      console.error("Failed to parse quote extraction response:", result, err);
+      continue;  // Try next chunk
     }
-    var parsed = JSON.parse(jsonStr);
-
-    var quote = parsed.extracted_quote;
-    var confidence = parseFloat(parsed.confidence) || 0.5;
-
-    // Normalize empty/none values
-    if (!quote || quote.toLowerCase() === "none" || quote.toLowerCase() === "null" || quote === "n/a") {
-      console.warn("Quote extraction returned empty/none value");
-      return null;
-    }
-
-    // Strip surrounding quotes if LLM added them anyway
-    quote = quote.trim();
-    while (quote.length >= 2 && (
-      (quote.startsWith('"') && quote.endsWith('"')) ||
-      (quote.startsWith("'") && quote.endsWith("'"))
-    )) {
-      quote = quote.slice(1, -1).trim();
-    }
-
-    // Validate: quote must actually exist in the passage (whitespace-normalized)
-    var normPassage = passage.replace(/\s+/g, " ").toLowerCase();
-    var normQuote = quote.replace(/\s+/g, " ").toLowerCase();
-    if (!normPassage.includes(normQuote)) {
-      console.warn("Extracted quote not found in passage, discarding:", quote.substring(0, 80) + "...");
-      return null;
-    }
-
-    // Only accept if confidence is reasonable
-    if (confidence < 0.2) {
-      console.warn("Quote extraction confidence too low:", confidence);
-      return null;
-    }
-
-    return quote;
-  } catch (err) {
-    console.error("Failed to parse quote extraction response:", result, err);
-    return null;
   }
+
+  // No valid quote found in any chunk
+  return null;
 }
 
 // Store a user-generated grade
@@ -592,13 +716,14 @@ async function extractQuotesForActiveNuggets() {
       passage = doc.text || doc.body || "";
     }
   } else if (runId) {
-    // Report mode - get report text
+    // Report mode - use sentence.text (matches rendered text) for quote extraction
     var report = reportIndex[topicId] && reportIndex[topicId][runId];
     if (report) {
-      passage = report.response_text || "";
-      if (!passage && report.sentences) {
-        passage = report.sentences.map(function(s) { return s.text; }).join(" ");
+      passage = "";
+      if (report.sentences && report.sentences.length > 0) {
+        passage = report.sentences.map(function(s) { return s.text || ""; }).join(" ");
       }
+      if (!passage) passage = report.response_text || "";
     }
   }
 
@@ -1017,5 +1142,120 @@ async function gradeDocsForReport() {
 // Check if Grade Docs is currently running
 function isGradeDocsActive() {
   return gradeDocsState.active;
+}
+
+// --- Grade All Nuggets ---
+// Grade all nuggets for the current topic across all reports
+
+async function gradeAllNuggets() {
+  // Check API key first
+  if (!getLlmApiKey()) {
+    alert("Please set your OpenRouter API key first (click LLM indicator in top bar).");
+    return;
+  }
+
+  var topicId = state.selectedTopic;
+  if (!topicId) {
+    alert("Please select a topic first.");
+    return;
+  }
+
+  // Get all nuggets for this topic
+  var bank = DATA.nugget_banks && DATA.nugget_banks[topicId];
+  var nuggets = bank ? (bank.nuggets || []) : [];
+  var claims = bank ? (bank.claims || []) : [];
+  var allNuggets = nuggets.concat(claims);
+
+  // Add user-created nuggets
+  var userNuggets = (typeof getCanonicalizedNuggetsForTopic === "function")
+    ? getCanonicalizedNuggetsForTopic(topicId)
+    : [];
+  allNuggets = allNuggets.concat(userNuggets);
+
+  if (allNuggets.length === 0) {
+    alert("No nuggets to grade for this topic.");
+    return;
+  }
+
+  // Get all reports for this topic
+  var runs = reportIndex[topicId] ? Object.keys(reportIndex[topicId]) : [];
+  if (runs.length === 0) {
+    alert("No reports found for this topic.");
+    return;
+  }
+
+  // Filter to enabled nuggets only
+  var enabledNuggets = allNuggets.filter(function(n) {
+    return typeof isNuggetEffectivelyEnabled !== "function" || isNuggetEffectivelyEnabled(n.nugget_id);
+  });
+
+  if (enabledNuggets.length === 0) {
+    alert("No active nuggets. Enable some nuggets first.");
+    return;
+  }
+
+  // Build list of grading tasks (nugget x report pairs that need grading)
+  var tasks = [];
+  enabledNuggets.forEach(function(n) {
+    var nuggetText = n.text || n.question || "";
+    var nuggetId = n.nugget_id;
+    var isAvoidNugget = (n.importance === "avoid" || n.quality === "avoid" || n.nugget_type === "avoid");
+
+    runs.forEach(function(runId) {
+      var existingGrade = (typeof getReportGrade === "function") ? getReportGrade(topicId, runId, nuggetId) : null;
+      if (!existingGrade || typeof existingGrade.grade !== "number") {
+        tasks.push({
+          nuggetId: nuggetId,
+          nuggetText: nuggetText,
+          runId: runId,
+          isAvoidNugget: isAvoidNugget
+        });
+      }
+    });
+  });
+
+  if (tasks.length === 0) {
+    alert("All nuggets are already graded for all reports.");
+    return;
+  }
+
+  // Start progress bar on the Grade All button
+  var gradeBtn = document.getElementById("grade-all-btn");
+  if (typeof startProgressOperation === "function" && gradeBtn) {
+    startProgressOperation(gradeBtn, tasks.length);
+  }
+
+  // Process tasks with backpressure queue
+  var promises = tasks.map(function(task) {
+    return queueLlmTask(async function() {
+      var result = await gradeNuggetForReport(topicId, task.runId, task.nuggetId, task.nuggetText, task.isAvoidNugget);
+
+      if (result) {
+        storeUserGrade(topicId, task.runId, task.nuggetId, result);
+      }
+
+      if (typeof incrementProgress === "function") {
+        incrementProgress();
+      }
+
+      // Update UI periodically
+      if (typeof renderAll === "function") {
+        renderAll();
+      }
+
+      return result;
+    });
+  });
+
+  await Promise.all(promises);
+
+  if (typeof endProgressOperation === "function") {
+    endProgressOperation();
+  }
+
+  // Final render
+  if (typeof renderAll === "function") {
+    renderAll();
+  }
 }
 """

@@ -8,6 +8,12 @@ if (!DATA) { document.body.innerHTML = "<p>Error: No data embedded.</p>"; return
 
 // State
 var state = {
+  // Phase management (new nugget-centric UI)
+  phase: "creation",  // "creation" | "qc" | "observe"
+  navHistory: [],  // [{phase, topicId, runId}] for back button
+  rankingScope: "all",  // "all" | "single" for observe mode toggle
+
+  // Selection state
   selectedTopic: null,
   selectedRun: null,
   selectedDoc: null,
@@ -16,6 +22,19 @@ var state = {
   expandedRuns: {},  // "topicId|runId" -> boolean
   mode: "documents",   // "documents" or "citations" (controls fold-out content)
   annotations: {},   // key = "r|topicId|runId" or "d|topicId|docId" or "c|topicId|runId|sentIdx|docId" -> annotation
+
+  // Draft card state (new nugget creation)
+  draftState: {
+    visible: false,
+    spans: [],  // [{start, end, text}]
+    freetext: "",
+    nuggetText: "",
+    category: "must_have",  // "must_have" | "should_have" | "avoid"
+    canonicalized: false,
+    impactVisible: false,
+    impactResults: []  // [{runId, quote, confidence}]
+  },
+
   // Nuggets mode state
   enabledNuggets: {},  // nugget_id -> boolean (default true)
   nuggetWeights: { must: 1.0, should: 1.0, avoid: -1.0 },  // category -> weight
@@ -33,15 +52,24 @@ var state = {
 
 // DOM refs
 var usernameInput = document.getElementById("username-input");
-var datasetLabel = document.getElementById("dataset-label");
-var navTree = document.getElementById("nav-tree");
-var mainPanel = document.getElementById("main-panel");
+var navPanel = document.getElementById("navPanel");
+var sourcePanel = document.getElementById("sourcePanel");
+var sourceContent = document.getElementById("sourceContent");
+var rankingPanel = document.getElementById("rankingPanel");
+var rankingList = document.getElementById("rankingList");
+var nuggetsPanel = document.getElementById("nuggetsPanel");
 var modalOverlay = document.getElementById("modal-overlay");
 var modalTitle = document.getElementById("modal-title");
 var modalUrl = document.getElementById("modal-url");
 var modalText = document.getElementById("modal-text");
 var modalClose = document.getElementById("modal-close");
-var modeSelect = document.getElementById("mode-select");
+var selectionPrompt = document.getElementById("selectionPrompt");
+
+// Legacy refs (for backwards compatibility with existing modules)
+var mainPanel = sourcePanel;  // Alias for existing code
+var modeSelect = null;  // No longer used in new UI
+var datasetLabel = null;  // Moved to a different location
+var navTree = navPanel;  // Alias for existing code
 
 // Index data
 var requestMap = {};  // request_id -> request
@@ -69,7 +97,7 @@ DATA.reports.forEach(function(r) {
 topicIds = DATA.requests.map(function(r) { return r.request_id; });
 
 // Init
-datasetLabel.textContent = "Dataset: " + DATA.dataset;
+// Dataset label is shown in top bar via title (set in HTML generation)
 var usernameBanner = document.getElementById("username-banner");
 var savedUsername = localStorage.getItem("autojudge_annotate_username");
 if (savedUsername) usernameInput.value = savedUsername;
@@ -109,7 +137,7 @@ if (savedAnnotations) {
   } catch(e) { state.annotations = {}; }
 }
 
-// Load saved mode from localStorage
+// Load saved mode from localStorage (legacy, kept for backwards compatibility)
 var savedMode = localStorage.getItem("autojudge_annotate_mode_" + DATA.dataset);
 if (savedMode === "documents" || savedMode === "citations") {
   state.mode = savedMode;
@@ -117,7 +145,12 @@ if (savedMode === "documents" || savedMode === "citations") {
   // Migrate legacy modes to "documents"
   state.mode = "documents";
 }
-modeSelect.value = state.mode;
+
+// Load saved phase from localStorage
+var savedPhase = localStorage.getItem("autojudge_annotate_phase_" + DATA.dataset);
+if (savedPhase === "creation" || savedPhase === "qc" || savedPhase === "observe") {
+  state.phase = savedPhase;
+}
 
 // Load saved user nugget grades from localStorage
 var savedUserGrades = localStorage.getItem("autojudge_annotate_grades_" + DATA.dataset);
@@ -145,17 +178,10 @@ function saveUserDocGrades() {
   localStorage.setItem("autojudge_annotate_docgrades_" + DATA.dataset, JSON.stringify(state.userDocGrades));
 }
 
-modeSelect.addEventListener("change", function() {
-  state.mode = modeSelect.value;
-  // Mode controls what appears in fold-out (documents or citations/sentences)
-  // Clear sub-selections when switching
-  state.selectedDoc = null;
-  state.selectedSentenceIdx = null;
-  state.selectedCitationIdx = null;
-  localStorage.setItem("autojudge_annotate_mode_" + DATA.dataset, state.mode);
-  renderSidebar();
-  renderMain();
-});
+// Save phase to localStorage (called from setPhase in template_js_phase.py)
+function savePhase() {
+  localStorage.setItem("autojudge_annotate_phase_" + DATA.dataset, state.phase);
+}
 
 // --- Annotation helpers ---
 
@@ -515,5 +541,124 @@ function resetAllAnnotationState() {
   // Final render with clean state
   renderSidebar();
   renderMain();
+}
+
+// Scrub quote text from LLM output - clean up common formatting issues
+// This is defined early so it's available to all modules
+function scrubQuote(quote) {
+    if (!quote) return '';
+
+    var scrubbed = quote;
+
+    // Remove surrounding quotes (single, double, escaped)
+    scrubbed = scrubbed.replace(/^["'`]+|["'`]+$/g, '');
+    scrubbed = scrubbed.replace(/^\\"|\\"$/g, '');
+    scrubbed = scrubbed.replace(/^\\'|\\'$/g, '');
+
+    // Remove markdown formatting
+    scrubbed = scrubbed.replace(/^\*+|\*+$/g, '');
+    scrubbed = scrubbed.replace(/^_+|_+$/g, '');
+
+    // Handle escaped newlines
+    scrubbed = scrubbed.replace(/\\n/g, ' ');
+
+    // Handle HTML entities
+    scrubbed = scrubbed.replace(/&quot;/g, '"');
+    scrubbed = scrubbed.replace(/&apos;/g, "'");
+    scrubbed = scrubbed.replace(/&amp;/g, '&');
+    scrubbed = scrubbed.replace(/&lt;/g, '<');
+    scrubbed = scrubbed.replace(/&gt;/g, '>');
+
+    // Normalize whitespace
+    scrubbed = scrubbed.replace(/\s+/g, ' ').trim();
+
+    // Handle ellipsis variations
+    scrubbed = scrubbed.replace(/\.{3,}/g, '...');
+    scrubbed = scrubbed.replace(/…/g, '...');
+
+    // Remove [sic] annotations
+    scrubbed = scrubbed.replace(/\s*\[sic\]\s*/gi, ' ');
+
+    // Remove leading/trailing punctuation that might have been added
+    scrubbed = scrubbed.replace(/^[,;:\s]+|[,;:\s]+$/g, '');
+
+    return scrubbed;
+}
+
+// Normalize text for fuzzy matching - handles Unicode variations
+// Used for both source text and quote text before comparison
+function normalizeForMatching(text) {
+    if (!text) return '';
+
+    var norm = text;
+
+    // Normalize curly/smart quotes to straight quotes
+    norm = norm.replace(/[\u2018\u2019\u201A\u201B]/g, "'");  // Single quotes
+    norm = norm.replace(/[\u201C\u201D\u201E\u201F]/g, '"');  // Double quotes
+    norm = norm.replace(/[\u00AB\u00BB]/g, '"');              // Guillemets
+
+    // Normalize dashes
+    norm = norm.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-');  // Various dashes to hyphen
+
+    // Normalize special whitespace
+    norm = norm.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ');  // Various spaces to regular space
+
+    // Normalize ellipsis
+    norm = norm.replace(/\u2026/g, '...');
+
+    // Remove zero-width characters
+    norm = norm.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+    // Collapse whitespace and lowercase
+    norm = norm.replace(/\s+/g, ' ').trim().toLowerCase();
+
+    return norm;
+}
+
+// Split a long passage into chunks with overlap for processing
+// Returns array of {text, startOffset} objects
+// chunkSize: target size of each chunk (default 6000)
+// overlap: overlap between chunks (default 1000)
+function chunkPassage(passage, chunkSize, overlap) {
+    chunkSize = chunkSize || 6000;
+    overlap = overlap || 1000;
+
+    if (!passage || passage.length <= chunkSize) {
+        return [{ text: passage || '', startOffset: 0 }];
+    }
+
+    var chunks = [];
+    var pos = 0;
+
+    while (pos < passage.length) {
+        var end = Math.min(pos + chunkSize, passage.length);
+
+        // Try to end at a sentence boundary if possible
+        if (end < passage.length) {
+            var lastPeriod = passage.lastIndexOf('. ', end);
+            var lastNewline = passage.lastIndexOf('\n', end);
+            var boundary = Math.max(lastPeriod, lastNewline);
+
+            // Only use boundary if it's reasonably close to target end
+            if (boundary > pos + chunkSize * 0.7) {
+                end = boundary + 1;
+            }
+        }
+
+        chunks.push({
+            text: passage.substring(pos, end),
+            startOffset: pos
+        });
+
+        // Move position, accounting for overlap
+        pos = end - overlap;
+
+        // Avoid infinite loop if overlap >= chunk size
+        if (pos <= chunks[chunks.length - 1].startOffset) {
+            pos = end;
+        }
+    }
+
+    return chunks;
 }
 """

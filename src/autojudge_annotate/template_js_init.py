@@ -24,14 +24,22 @@ function showCitationModal(report, citationId) {
   modalOverlay.classList.add("visible");
 }
 
-modalClose.addEventListener("click", function() {
-  modalOverlay.classList.remove("visible");
-});
-modalOverlay.addEventListener("click", function(e) {
-  if (e.target === modalOverlay) modalOverlay.classList.remove("visible");
-});
+if (modalClose) {
+  modalClose.addEventListener("click", function() {
+    modalOverlay.classList.remove("visible");
+  });
+}
+if (modalOverlay) {
+  modalOverlay.addEventListener("click", function(e) {
+    if (e.target === modalOverlay) modalOverlay.classList.remove("visible");
+  });
+}
 
 // --- Download ---
+
+function downloadAnnotations() {
+  handleDownload();
+}
 
 function handleDownload() {
   var lines = buildOutputLines();
@@ -51,20 +59,23 @@ function handleDownload() {
 }
 
 // Clear all annotations
-document.getElementById("clear-all-btn").addEventListener("click", function() {
-  if (!confirm("Clear all your annotations for this dataset? This cannot be undone.")) return;
+var clearAllBtn = document.getElementById("clear-all-btn");
+if (clearAllBtn) {
+  clearAllBtn.addEventListener("click", function() {
+    if (!confirm("Clear all your annotations for this dataset? This cannot be undone.")) return;
 
-  // Use centralized reset function (defined in template_js_state.py)
-  resetAllAnnotationState();
+    // Use centralized reset function (defined in template_js_state.py)
+    resetAllAnnotationState();
 
-  // Also delete from server if online and connected
-  if (syncMode === "online" && typeof syncDeleteAll === "function") {
-    syncDeleteAll().then(function(ok) {
-      if (ok) setSyncStatus("success");
-      else setSyncStatus("error");
-    });
-  }
-});
+    // Also delete from server if online and connected
+    if (syncMode === "online" && typeof syncDeleteAll === "function") {
+      syncDeleteAll().then(function(ok) {
+        if (ok) setSyncStatus("success");
+        else setSyncStatus("error");
+      });
+    }
+  });
+}
 
 // Initialize LLM indicator in topbar
 if (typeof initLlmIndicator === "function") {
@@ -87,6 +98,41 @@ if (topicIds.length > 0) {
     }
   }
 }
-renderSidebar();
-renderMain();
+// Apply phase visibility before rendering
+if (typeof applyPhaseVisibility === "function") {
+  applyPhaseVisibility();
+}
+
+// Render using new UI if available, else fallback to legacy
+if (typeof renderAll === "function") {
+  renderAll();
+} else {
+  renderSidebar();
+  renderMain();
+}
+
+// --- Global Exports ---
+// Expose functions to window for onclick handlers in HTML
+// (functions defined in IIFE are not accessible to inline onclick otherwise)
+
+window.setPhase = typeof setPhase === "function" ? setPhase : function() {};
+window.goBack = typeof goBack === "function" ? goBack : function() {};
+window.setRankingScope = typeof setRankingScope === "function" ? setRankingScope : function() {};
+window.downloadAnnotations = typeof downloadAnnotations === "function" ? downloadAnnotations : function() {};
+window.gradeAllNuggets = typeof gradeAllNuggets === "function" ? gradeAllNuggets : function() {};
+window.showDraft = typeof showDraft === "function" ? showDraft : function() {};
+window.hideDraft = typeof hideDraft === "function" ? hideDraft : function() {};
+window.canonicalize = typeof canonicalize === "function" ? canonicalize : function() {};
+window.checkImpact = typeof checkImpact === "function" ? checkImpact : function() {};
+window.commitNugget = typeof commitNugget === "function" ? commitNugget : function() {};
+window.removeSpan = typeof removeSpan === "function" ? removeSpan : function() {};
+window.updateDraftFreetext = typeof updateDraftFreetext === "function" ? updateDraftFreetext : function() {};
+window.updateDraftNuggetText = typeof updateDraftNuggetText === "function" ? updateDraftNuggetText : function() {};
+window.setDraftCategory = typeof setDraftCategory === "function" ? setDraftCategory : function() {};
+window.navigateToQuote = typeof navigateToQuote === "function" ? navigateToQuote : function() {};
+window.toggleSolo = typeof toggleSolo === "function" ? toggleSolo : function() {};
+window.unsoloAll = typeof unsoloAll === "function" ? unsoloAll : function() {};
+window.toggleNuggetEnabled = typeof toggleNuggetEnabled === "function" ? toggleNuggetEnabled : function() {};
+window.toggleQuoteHighlight = typeof toggleQuoteHighlight === "function" ? toggleQuoteHighlight : function() {};
+window.selectReportFromRanking = typeof selectReportFromRanking === "function" ? selectReportFromRanking : function() {};
 """

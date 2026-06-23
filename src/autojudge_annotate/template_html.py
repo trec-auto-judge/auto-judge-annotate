@@ -1,40 +1,98 @@
-"""HTML body content for the annotation interface."""
+"""HTML body content for the annotation interface.
+
+New nugget-centric layout with three phases (Creation, QC, Observe)
+and three-column layout: Nav | Middle | Nuggets
+"""
 
 HTML_BLOCK = r"""
-<div class="topbar">
-  <label for="username-input">Username:</label>
-  <input type="text" id="username-input" placeholder="Enter your name...">
-  <label for="mode-select">Expand:</label>
-  <select id="mode-select">
-    <option value="documents">Documents</option>
-    <option value="citations">Citations</option>
-  </select>
-  <span id="sync-controls" class="sync-controls">
-    <label for="sync-mode">Sync:</label>
-    <select id="sync-mode">
-      <option value="offline">Offline</option>
-      <option value="online">Online</option>
-    </select>
-    <span class="sync-status sync-idle" id="sync-status"></span>
-  </span>
-  <span id="llm-controls" class="llm-controls">
-    <label>LLM:</label>
-    <span class="llm-indicator" id="llm-indicator" title="Click to set API key">?</span>
-  </span>
-  <span class="dataset-label" id="dataset-label"></span>
+<!-- Top Bar with Phase Tabs -->
+<div class="top-bar">
+  <button class="back-btn" id="backBtn" onclick="goBack()">&larr; Back</button>
+  <span class="logo">Nugget Annotator</span>
+
+  <div class="phase-tabs">
+    <button class="phase-tab active" id="tab-creation" onclick="setPhase('creation')">Creation</button>
+    <button class="phase-tab" id="tab-qc" onclick="setPhase('qc')">QC</button>
+    <button class="phase-tab" id="tab-observe" onclick="setPhase('observe')">Observe</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="top-actions">
+    <input type="text" id="username-input" class="username-input" placeholder="Username...">
+    <span id="sync-controls" class="sync-controls">
+      <select id="sync-mode" class="sync-select">
+        <option value="offline">Offline</option>
+        <option value="online">Online</option>
+      </select>
+      <span class="sync-status sync-idle" id="sync-status"></span>
+    </span>
+    <span id="llm-controls" class="llm-controls">
+      <span class="llm-indicator" id="llm-indicator" title="Click to set API key">?</span>
+    </span>
+    <button id="export-btn" onclick="downloadAnnotations()">Export</button>
+    <button class="primary progress-btn" id="grade-all-btn" onclick="gradeAllNuggets()">
+      <span class="btn-text">Grade All</span>
+      <span class="progress-indicator"></span>
+    </button>
+  </div>
 </div>
+
+<!-- Username Banner (shown when no username) -->
 <div class="username-banner" id="username-banner">Please enter a username above before annotating.</div>
 
-<div class="container">
-  <div class="sidebar" id="sidebar">
-    <div id="nav-tree"></div>
-    <button class="clear-all-btn" id="clear-all-btn">Clear my annotations for this dataset</button>
+<!-- Main Three-Column Layout -->
+<div class="main-container">
+  <!-- Navigation Panel -->
+  <div class="nav-panel" id="navPanel">
+    <!-- Rendered by JS: queries section + reports section -->
   </div>
-  <div class="main-panel" id="main-panel">
-    <div class="empty-state">Select a topic and run from the sidebar to begin annotating.</div>
+
+  <!-- Middle Panel -->
+  <div class="middle-panel">
+    <!-- Source Panel (Creation phase) -->
+    <div class="source-panel" id="sourcePanel">
+      <div class="source-header">
+        <div class="source-title-area">
+          <div class="source-title" id="sourceTitle">Select a report</div>
+          <div class="source-subtitle" id="sourceSubtitle"></div>
+        </div>
+      </div>
+      <div class="source-content" id="sourceContent">
+        <div class="empty-state">Select a query and report from the navigation to begin.</div>
+      </div>
+    </div>
+
+    <!-- Ranking Panel (QC/Observe phases) -->
+    <div class="ranking-panel" id="rankingPanel">
+      <div class="ranking-header">
+        <div class="ranking-header-top">
+          <span class="ranking-title">System Ranking</span>
+          <div class="ranking-toggle" id="rankingToggle">
+            <button class="active" onclick="setRankingScope('all')">All Queries</button>
+            <button onclick="setRankingScope('single')">This Query</button>
+          </div>
+        </div>
+        <div class="metrics-bar" id="metricsBar">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+      <div class="ranking-list" id="rankingList">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Nuggets Panel -->
+  <div class="nuggets-panel" id="nuggetsPanel">
+    <!-- Rendered by JS: header, solo bar, draft card, category sections -->
   </div>
 </div>
 
+<!-- Selection Prompt (appears on text selection) -->
+<div class="selection-prompt" id="selectionPrompt">+ Add as span</div>
+
+<!-- Citation Document Modal -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal" id="modal">
     <h3 id="modal-title"></h3>
