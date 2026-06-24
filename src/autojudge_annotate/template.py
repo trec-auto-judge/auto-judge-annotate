@@ -33,6 +33,7 @@ from .template_js_nuggets_panel import JS_NUGGETS_PANEL
 from .template_js_draft import JS_DRAFT
 
 SUPABASE_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>\n'
+MD5_CDN = '<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>\n'
 
 HTML_TEMPLATE = (
     '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
@@ -40,6 +41,7 @@ HTML_TEMPLATE = (
     '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
     '<title>AutoJudge Annotation Interface</title>\n'
     + SUPABASE_CDN
+    + MD5_CDN
     + '<style>\n' + CSS_BLOCK + '\n</style>\n</head>\n<body>\n'
     + HTML_BLOCK
     + '\n<script>\n(function() {\n"use strict";\n'

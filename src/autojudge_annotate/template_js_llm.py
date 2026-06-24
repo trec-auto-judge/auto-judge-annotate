@@ -586,8 +586,54 @@ function storeUserGrade(topicId, runId, nuggetId, gradeData) {
   if (!state.userNuggetGrades[topicId][runId]) {
     state.userNuggetGrades[topicId][runId] = {};
   }
+  // Debug: log when storing a grade with a quote
+  if (gradeData && gradeData.addressed_quote) {
+    console.log('storeUserGrade WITH QUOTE:', {
+      topicId: topicId,
+      runId: runId,
+      nuggetId: nuggetId,
+      quote: gradeData.addressed_quote.substring(0, 50) + '...'
+    });
+  }
   state.userNuggetGrades[topicId][runId][nuggetId] = gradeData;
   saveUserNuggetGrades();
+}
+
+// Void all grades/quotes for a nugget (when nugget text changes)
+function voidGradesForNugget(topicId, nuggetId) {
+  var voided = 0;
+
+  // Void user-generated report grades
+  if (state.userNuggetGrades[topicId]) {
+    Object.keys(state.userNuggetGrades[topicId]).forEach(function(runId) {
+      if (state.userNuggetGrades[topicId][runId] &&
+          state.userNuggetGrades[topicId][runId][nuggetId]) {
+        delete state.userNuggetGrades[topicId][runId][nuggetId];
+        voided++;
+      }
+    });
+  }
+
+  // Void user-generated doc grades
+  if (state.userDocGrades && state.userDocGrades[topicId]) {
+    Object.keys(state.userDocGrades[topicId]).forEach(function(docId) {
+      if (state.userDocGrades[topicId][docId] &&
+          state.userDocGrades[topicId][docId][nuggetId]) {
+        delete state.userDocGrades[topicId][docId][nuggetId];
+        voided++;
+      }
+    });
+  }
+
+  // Save changes
+  if (voided > 0) {
+    saveUserNuggetGrades();
+    if (typeof saveUserDocGrades === 'function') {
+      saveUserDocGrades();
+    }
+  }
+
+  return voided;
 }
 
 // Grade a user nugget across all reports for a topic

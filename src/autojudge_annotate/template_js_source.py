@@ -110,6 +110,15 @@ function applyQuoteHighlights() {
         // Check if this nugget should be heavily highlighted (Quote button active)
         var isHeavy = state.heavyHighlightNuggetId === nuggetId;
 
+        // Debug: show what quote is being used for highlighting
+        if (isHeavy) {
+            console.log('=== applyQuoteHighlights ===');
+            console.log('nuggetId:', nuggetId);
+            console.log('nuggetText:', (nugget.text || nugget.question || '').substring(0, 50) + '...');
+            console.log('runId:', state.selectedRun);
+            console.log('grade.addressed_quote:', grade.addressed_quote.substring(0, 80) + '...');
+        }
+
         // Find and highlight the quote
         var quote = grade.addressed_quote;
         var found = highlightQuoteInSource(sourceText, quote, nugget.importance || 'should_have', nuggetId, isHeavy);
@@ -158,35 +167,57 @@ function highlightQuoteInSource(container, quoteText, category, nuggetId, isHeav
     var nodeMap = [];  // {node, start, end}
 
     while (node = walker.nextNode()) {
-        var start = fullText.length;
         // Add space between text nodes (paragraphs) to match how LLM sees joined text
         if (fullText.length > 0) fullText += ' ';
+        // Record start AFTER adding space, so nodeMap positions match actual node content
+        var start = fullText.length;
         fullText += node.textContent;
         nodeMap.push({ node: node, start: start, end: fullText.length });
     }
 
-    var normalizedFull = normalizeFunc(fullText);
-    var matchIdx = normalizedFull.indexOf(normalizedQuote);
+    // Try to find match in UNNORMALIZED text first (preserves positions)
+    var lowerFullText = fullText.toLowerCase();
+    var lowerQuote = scrubbedQuote.toLowerCase();
+    var matchIdx = lowerFullText.indexOf(lowerQuote);
 
-    // If full quote not found, try matching just the first sentence/portion
-    // (LLM sometimes returns multi-paragraph quotes that span elements)
-    if (matchIdx === -1 && normalizedQuote.length > 100) {
-        // Try first 100 chars
-        var shortQuote = normalizedQuote.substring(0, 100);
-        matchIdx = normalizedFull.indexOf(shortQuote);
-        if (matchIdx !== -1) {
-            console.log('Matched partial quote (first 100 chars)');
+    // If not found, try normalized matching but then re-locate in unnormalized
+    var usedNormalized = false;
+    if (matchIdx === -1) {
+        var normalizedFull = normalizeFunc(fullText);
+        var normalizedMatchIdx = normalizedFull.indexOf(normalizedQuote);
+
+        // Try partial matching if full quote not found
+        if (normalizedMatchIdx === -1 && normalizedQuote.length > 100) {
+            var shortQuote = normalizedQuote.substring(0, 100);
+            normalizedMatchIdx = normalizedFull.indexOf(shortQuote);
+            if (normalizedMatchIdx !== -1) {
+                console.log('Matched partial quote (first 100 chars) in normalized');
+            }
         }
-    }
 
-    // Try matching first sentence if still not found
-    if (matchIdx === -1 && normalizedQuote.length > 50) {
-        var firstSentenceEnd = normalizedQuote.search(/[.!?]\s/);
-        if (firstSentenceEnd > 20) {
-            var firstSentence = normalizedQuote.substring(0, firstSentenceEnd + 1);
-            matchIdx = normalizedFull.indexOf(firstSentence);
-            if (matchIdx !== -1) {
-                console.log('Matched first sentence of quote');
+        if (normalizedMatchIdx === -1 && normalizedQuote.length > 50) {
+            var firstSentenceEnd = normalizedQuote.search(/[.!?]\s/);
+            if (firstSentenceEnd > 20) {
+                var firstSentence = normalizedQuote.substring(0, firstSentenceEnd + 1);
+                normalizedMatchIdx = normalizedFull.indexOf(firstSentence);
+                if (normalizedMatchIdx !== -1) {
+                    console.log('Matched first sentence in normalized');
+                }
+            }
+        }
+
+        // If found in normalized, try to find same text in unnormalized using first N words
+        if (normalizedMatchIdx !== -1) {
+            usedNormalized = true;
+            // Extract first few words from matched position
+            var matchedNormText = normalizedFull.substring(normalizedMatchIdx, normalizedMatchIdx + 60);
+            var firstWords = matchedNormText.split(/\s+/).slice(0, 5).join(' ');
+            if (firstWords.length > 10) {
+                // Search for these words in lowercased unnormalized text
+                matchIdx = lowerFullText.indexOf(firstWords);
+                if (matchIdx !== -1 && isHeavy) {
+                    console.log('Re-located in unnormalized using first words:', firstWords);
+                }
             }
         }
     }
@@ -196,13 +227,23 @@ function highlightQuoteInSource(container, quoteText, category, nuggetId, isHeav
         console.log('=== Quote Match Debug ===');
         console.log('Quote length:', quoteText.length);
         console.log('Original quote (first 200):', quoteText.substring(0, 200));
-        console.log('Normalized quote (first 200):', normalizedQuote.substring(0, 200));
-        console.log('Source text (first 500):', normalizedFull.substring(0, 500));
+        console.log('Lower quote (first 200):', lowerQuote.substring(0, 200));
+        console.log('Source text length:', fullText.length);
+        console.log('Source text (first 500):', fullText.substring(0, 500));
     }
 
     if (matchIdx === -1) return false;  // Quote not found
 
-    // Map back to original character positions (approximate)
+    // Debug: show what was matched and where
+    if (isHeavy) {
+        console.log('=== Quote Match SUCCESS ===');
+        console.log('Match index (unnormalized):', matchIdx);
+        console.log('Used normalized matching:', usedNormalized);
+        console.log('Quote preview:', lowerQuote.substring(0, 80) + '...');
+        console.log('Matched text in source:', fullText.substring(matchIdx, matchIdx + 80) + '...');
+    }
+
+    // Map back to original character positions
     var categoryClass = category === 'must_have' ? 'must' : (category === 'avoid' ? 'avoid' : 'should');
 
     // Find which node contains the start of the match

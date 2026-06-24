@@ -25,28 +25,14 @@ function getReportDocIds(report) {
 
 // Get report grade for a nugget
 // Returns: {grade, reasoning, confidence} or null if no grade
-// Checks both DATA.nugget_grades (pre-loaded) and state.userNuggetGrades (user-generated)
+// All grades (preloaded + user-generated) are merged into userNuggetGrades at init
 function getReportGrade(topicId, runId, nuggetId) {
-  // First check user-generated grades (these take precedence)
   if (state.userNuggetGrades[topicId] &&
       state.userNuggetGrades[topicId][runId] &&
       state.userNuggetGrades[topicId][runId][nuggetId]) {
     return state.userNuggetGrades[topicId][runId][nuggetId];
   }
-
-  // Then check pre-loaded grades from DATA
-  if (!DATA.nugget_grades) {
-    return null;
-  }
-  var topicGrades = DATA.nugget_grades[topicId];
-  if (!topicGrades) {
-    return null;
-  }
-  var runGrades = topicGrades[runId];
-  if (!runGrades) {
-    return null;
-  }
-  return runGrades[nuggetId] || null;
+  return null;
 }
 
 // Get document-level grade for a nugget
@@ -88,7 +74,11 @@ function getDocGrade(topicId, docId, nuggetId) {
 
 // Determine verdict class and icon based on grade
 // Grade 4-5: satisfied (checkmark), 1-3: partial (tilde), 0: not satisfied (X)
+// null/undefined/non-number: unknown (?)
 function gradeToVerdict(grade) {
+  if (grade === null || grade === undefined || typeof grade !== 'number') {
+    return { cls: "nugget-unknown", icon: "&#63;", label: "unknown" };
+  }
   if (grade >= 4) {
     return { cls: "nugget-satisfied", icon: "&#10003;", label: "satisfied" };
   } else if (grade >= 1) {

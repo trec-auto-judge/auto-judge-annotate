@@ -160,6 +160,27 @@ if (savedUserGrades) {
   } catch(e) { state.userNuggetGrades = {}; }
 }
 
+// Merge preloaded grades into userNuggetGrades (user grades take precedence)
+// This ensures preloaded grades can be voided just like user grades
+if (DATA.nugget_grades) {
+  Object.keys(DATA.nugget_grades).forEach(function(topicId) {
+    if (!state.userNuggetGrades[topicId]) {
+      state.userNuggetGrades[topicId] = {};
+    }
+    Object.keys(DATA.nugget_grades[topicId] || {}).forEach(function(runId) {
+      if (!state.userNuggetGrades[topicId][runId]) {
+        state.userNuggetGrades[topicId][runId] = {};
+      }
+      Object.keys(DATA.nugget_grades[topicId][runId] || {}).forEach(function(nuggetId) {
+        // Only copy if user doesn't already have a grade
+        if (!state.userNuggetGrades[topicId][runId][nuggetId]) {
+          state.userNuggetGrades[topicId][runId][nuggetId] = DATA.nugget_grades[topicId][runId][nuggetId];
+        }
+      });
+    });
+  });
+}
+
 // Save user nugget grades to localStorage
 function saveUserNuggetGrades() {
   localStorage.setItem("autojudge_annotate_grades_" + DATA.dataset, JSON.stringify(state.userNuggetGrades));

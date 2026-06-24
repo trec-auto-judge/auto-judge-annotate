@@ -59,7 +59,7 @@ function countNuggetCoverageStats(topicId, nuggetId, nugget) {
 
 // Convert grade to verdict display
 function gradeToVerdict(grade) {
-    if (!grade || grade === null) {
+    if (grade === null || grade === undefined || typeof grade !== 'number') {
         return { cls: 'unknown', icon: '?', label: 'unknown' };
     }
     if (grade >= 4) {
@@ -93,7 +93,6 @@ function renderNuggetsPanel() {
     var nuggets = bank ? (bank.nuggets || []) : [];
     var claims = bank ? (bank.claims || []) : [];
     var allNuggets = nuggets.concat(claims);
-
     var isCreation = state.phase === 'creation';
     var isQC = state.phase === 'qc';
     var isObserve = state.phase === 'observe';
@@ -267,8 +266,15 @@ function renderNuggetRow(nugget, categoryKey) {
                 // Has quote text
                 quoteState = 'has';
                 quoteLabel = isActive ? 'Hide Quote' : 'Show Quote';
+            } else {
+                // Debug: grade exists but addressed_quote is null (unexpected after Check Impact)
+                console.warn('QUOTE MISSING: grade exists but addressed_quote is null', {
+                    nuggetId: nuggetId,
+                    runId: state.selectedRun,
+                    grade: grade.grade,
+                    addressedQuote: grade.addressed_quote
+                });
             }
-            // else: null = not attempted, keep 'find'
         }
 
         html += '<div class="nugget-report visible">';
@@ -343,13 +349,18 @@ function editNugget(nuggetId) {
     var nugget = allNuggets.find(function(n) { return n.nugget_id === nuggetId; });
     if (!nugget) return;
 
+    var nuggetText = nugget.text || nugget.question || '';
+
     // Initialize draft state with nugget data
+    // originalNuggetId: ID in DATA.nugget_banks (for finding nugget to update on commit)
+    // editingNuggetId: hash of current text (for looking up/storing grades)
     state.draftState = {
         visible: true,
-        editingNuggetId: nuggetId,  // Mark as editing existing
+        originalNuggetId: nuggetId,  // ID in DATA.nugget_banks
+        editingNuggetId: hashNuggetText(nuggetText),  // Hash-based ID for grades
         spans: nugget.source_spans || [],
         freetext: nugget.source_freetext || '',
-        nuggetText: nugget.text || nugget.question || '',
+        nuggetText: nuggetText,
         category: nugget.importance || nugget.quality || 'should_have',
         canonicalized: true,  // Already has nugget text
         impactVisible: false,

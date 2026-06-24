@@ -5,6 +5,15 @@ JS_DRAFT = r"""
 // Draft Card (New Nugget Creation)
 // ============================================================================
 
+// Hash function for generating nugget IDs from text
+// Uses blueimp-md5 CDN library to match Python's hashlib.md5(text.encode("utf-8")).hexdigest()
+// Used only for NEW nuggets created in browser.
+// Existing nuggets keep their original IDs (UUIDs from data files).
+function hashNuggetText(text) {
+    // md5() is provided by the blueimp-md5 CDN library loaded in <head>
+    return md5(text);
+}
+
 // Show the draft card
 function showDraft() {
     state.draftState = {
@@ -192,6 +201,8 @@ function updateDraftFreetext(value) {
 // Update nugget text
 function updateDraftNuggetText(value) {
     state.draftState.nuggetText = value;
+    // Keep impact results visible while editing - user can still see them
+    // They will be re-graded when "Check Impact" is clicked
 }
 
 // Set draft category
@@ -337,6 +348,7 @@ async function canonicalize() {
 
 // Check impact: grade nugget against all reports and extract quotes
 // Uses concurrent LLM calls with progress bar
+// Nugget ID is hash of text - same text = same ID = cached grades
 async function checkImpact() {
     var ds = state.draftState;
 
@@ -366,6 +378,13 @@ async function checkImpact() {
         return;
     }
 
+    // Compute hash of current text - this becomes the nugget ID for grading
+    // Same text = same hash = grades are automatically cached
+    // Different text = different hash = fresh grades computed
+    var nuggetId = hashNuggetText(ds.nuggetText);
+    ds.editingNuggetId = nuggetId;
+    console.log('checkImpact: nuggetId (hash) =', nuggetId, ', text =', ds.nuggetText.substring(0, 50) + '...');
+
     // Start progress - each report needs grade + possibly quote extraction
     if (typeof startProgressOperation === 'function') {
         startProgressOperation(impactBtn, runIds.length);
@@ -376,14 +395,11 @@ async function checkImpact() {
     var results = [];
     var isAvoidNugget = ds.category === 'avoid';
 
-    // When editing an existing nugget, check for existing grades
-    var editingNuggetId = ds.editingNuggetId;
-
     // Separate reports into those with existing grades and those needing LLM calls
     var reportsNeedingGrade = [];
     runIds.forEach(function(runId) {
-        if (editingNuggetId && typeof getReportGrade === 'function') {
-            var existingGrade = getReportGrade(state.selectedTopic, runId, editingNuggetId);
+        if (nuggetId && typeof getReportGrade === 'function') {
+            var existingGrade = getReportGrade(state.selectedTopic, runId, nuggetId);
             if (existingGrade && typeof existingGrade.grade === 'number') {
                 // Use existing grade
                 results.push({
@@ -565,6 +581,20 @@ async function checkImpact() {
     ds.impactResults = results;
     ds.impactVisible = true;
 
+    // Store grades to localStorage immediately (don't wait for commit)
+    // This enables caching on subsequent checkImpact clicks with same text
+    if (nuggetId && typeof storeUserGrade === 'function') {
+        results.forEach(function(result) {
+            if (result && result.runId && typeof result.grade === 'number' && !result.fromCache) {
+                storeUserGrade(state.selectedTopic, result.runId, nuggetId, {
+                    grade: result.grade,
+                    reasoning: result.reasoning || '',
+                    addressed_quote: result.quote || ''
+                });
+            }
+        });
+    }
+
     if (typeof endProgressOperation === 'function') {
         endProgressOperation();
     } else {
@@ -575,6 +605,7 @@ async function checkImpact() {
 }
 
 // Commit the nugget to the bank
+// Uses hash-based nugget IDs so grades are automatically keyed by text
 function commitNugget() {
     var ds = state.draftState;
 
@@ -593,35 +624,89 @@ function commitNugget() {
         return;
     }
 
+    // Determine nugget ID
+    // If editing and text unchanged, keep original ID (preserves grades keyed by original UUID/ID)
+    // If text changed, compute new hash-based ID
+    var isEditing = ds.originalNuggetId;  // True if editing an existing nugget
     var nuggetId;
-    var isEditing = ds.editingNuggetId;
 
     if (isEditing) {
-        // Editing existing nugget
-        nuggetId = ds.editingNuggetId;
+        // Check if text actually changed by comparing with original
         var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
+        var originalNugget = null;
         if (bank) {
-            // Find and update the existing nugget
-            var allNuggets = bank.nuggets || [];
-            for (var i = 0; i < allNuggets.length; i++) {
-                if (allNuggets[i].nugget_id === nuggetId) {
-                    allNuggets[i].text = ds.nuggetText;
-                    allNuggets[i].question = ds.nuggetText;
-                    allNuggets[i].importance = ds.category;
-                    allNuggets[i].quality = ds.category;
-                    allNuggets[i].source_spans = ds.spans;
-                    allNuggets[i].source_freetext = ds.freetext;
-                    allNuggets[i].updated_at = new Date().toISOString();
-                    allNuggets[i].updated_by = usernameInput.value.trim() || 'anonymous';
-                    break;
+            var allNuggets = (bank.nuggets || []).concat(bank.claims || []);
+            originalNugget = allNuggets.find(function(n) { return n.nugget_id === ds.originalNuggetId; });
+        }
+        var originalText = originalNugget ? (originalNugget.text || originalNugget.question || '') : '';
+
+        if (ds.nuggetText === originalText) {
+            // Text unchanged - keep original ID to preserve grade associations
+            nuggetId = ds.originalNuggetId;
+            console.log('commitNugget: text unchanged, keeping original ID:', nuggetId);
+        } else {
+            // Text changed - compute new hash-based ID
+            nuggetId = hashNuggetText(ds.nuggetText);
+            console.log('commitNugget: text changed, new hash ID:', nuggetId);
+        }
+    } else {
+        // New nugget - always compute hash
+        nuggetId = hashNuggetText(ds.nuggetText);
+    }
+
+    if (isEditing) {
+        // Editing existing nugget - find by originalNuggetId, update with new hash-based ID
+        var originalId = ds.originalNuggetId;
+        var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
+        var foundAndUpdated = false;
+        if (bank) {
+            // Search in both nuggets and claims arrays
+            var arrays = [bank.nuggets || [], bank.claims || []];
+            for (var a = 0; a < arrays.length && !foundAndUpdated; a++) {
+                var arr = arrays[a];
+                for (var i = 0; i < arr.length; i++) {
+                    if (arr[i].nugget_id === originalId) {
+                        // Update the nugget with new hash-based ID
+                        console.log('commitNugget UPDATE:', {
+                            oldId: arr[i].nugget_id,
+                            newId: nuggetId,
+                            oldText: (arr[i].text || arr[i].question || '').substring(0, 50),
+                            newText: ds.nuggetText.substring(0, 50),
+                            arrayIndex: i,
+                            arrayName: a === 0 ? 'nuggets' : 'claims'
+                        });
+                        arr[i].nugget_id = nuggetId;
+                        arr[i].text = ds.nuggetText;
+                        arr[i].question = ds.nuggetText;
+                        arr[i].importance = ds.category;
+                        arr[i].quality = ds.category;
+                        arr[i].source_spans = ds.spans;
+                        arr[i].source_freetext = ds.freetext;
+                        arr[i].updated_at = new Date().toISOString();
+                        arr[i].updated_by = usernameInput.value.trim() || 'anonymous';
+                        foundAndUpdated = true;
+                        // Verify update stuck
+                        console.log('commitNugget VERIFY: arr[i].nugget_id =', arr[i].nugget_id);
+                        break;
+                    }
                 }
             }
         }
+
+        if (!foundAndUpdated) {
+            console.warn('commitNugget: Could not find nugget with ID', originalId, 'to update');
+        }
+
+        // Update enabled state if ID changed
+        if (originalId !== nuggetId) {
+            if (state.enabledNuggets[originalId] !== undefined) {
+                state.enabledNuggets[nuggetId] = state.enabledNuggets[originalId];
+                delete state.enabledNuggets[originalId];
+            }
+            console.log('Nugget ID changed:', originalId, '->', nuggetId);
+        }
     } else {
         // Creating new nugget
-        nuggetId = 'user-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
-
-        // Create nugget object
         var newNugget = {
             nugget_id: nuggetId,
             text: ds.nuggetText,
@@ -645,8 +730,12 @@ function commitNugget() {
         state.enabledNuggets[nuggetId] = true;
     }
 
-    // Save impact grades from the impact check (so we don't re-grade later)
-    if (ds.impactResults && ds.impactResults.length > 0 && typeof storeUserGrade === 'function') {
+    // Save impact grades under the new hash-based ID
+    // BUT only if the text hasn't changed since Check Impact (ds.editingNuggetId matches nuggetId)
+    // If user edited text after Check Impact, the grades are stale and shouldn't be stored
+    if (ds.impactResults && ds.impactResults.length > 0 &&
+        ds.editingNuggetId === nuggetId &&
+        typeof storeUserGrade === 'function') {
         ds.impactResults.forEach(function(result) {
             if (result && result.runId && typeof result.grade === 'number') {
                 storeUserGrade(state.selectedTopic, result.runId, nuggetId, {
