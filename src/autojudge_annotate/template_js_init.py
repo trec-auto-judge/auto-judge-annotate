@@ -42,16 +42,17 @@ function downloadAnnotations() {
 }
 
 function handleDownload() {
-  var lines = buildOutputLines();
+  // Export NuggetBanks in JSONL format (one line per topic)
+  var lines = buildNuggetBanksOutput();
   if (lines.length === 0) {
-    alert("No annotations to download.");
+    alert("No nugget banks to download. Make sure there are nuggets for at least one topic.");
     return;
   }
   var blob = new Blob([lines.join("\n") + "\n"], { type: "application/jsonl" });
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
   a.href = url;
-  a.download = DATA.dataset + "-annotations.jsonl";
+  a.download = DATA.dataset + "-nuggets.jsonl";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

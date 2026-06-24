@@ -320,21 +320,26 @@ async function canonicalize() {
                 var parsed = JSON.parse(jsonStr);
                 ds.nuggetText = parsed.nugget_question || parsed.nugget_text || '';
                 ds.explanation = parsed.explanation || '';
+                // Store the LLM model used for canonicalization
+                ds.llmModel = typeof LLM_MODEL !== 'undefined' ? LLM_MODEL : 'unknown';
             } else {
                 // Fallback if LLM returns null
                 ds.nuggetText = freetext || ('Does the response address: ' + spanTexts.join(' ').substring(0, 100) + '?');
+                ds.llmModel = null;  // No LLM used
             }
             ds.canonicalized = true;
         } catch (err) {
             console.error('Canonicalize error:', err);
             // Fallback on error
             ds.nuggetText = freetext || ('Does the response address: ' + spanTexts.join(' ').substring(0, 100) + '?');
+            ds.llmModel = null;  // No LLM used due to error
             ds.canonicalized = true;
         }
     } else {
         // No LLM available, use fallback
         ds.nuggetText = freetext ? ('Does the response ' + freetext.toLowerCase() + '?') :
                         ('Does the response mention: ' + spanTexts.join(' ').substring(0, 100) + '?');
+        ds.llmModel = null;  // No LLM used
         ds.canonicalized = true;
     }
 
@@ -720,6 +725,16 @@ function commitNugget() {
         }
     } else {
         // Creating new nugget
+        // Compute source_data from span source types
+        var sourceTypes = {};
+        ds.spans.forEach(function(span) {
+            var st = span.sourceType || 'report';
+            sourceTypes[st] = true;
+        });
+        var sourceDataList = Object.keys(sourceTypes);
+        // Use single value if uniform, else array
+        var sourceData = sourceDataList.length === 1 ? sourceDataList[0] : (sourceDataList.length > 0 ? sourceDataList : null);
+
         var newNugget = {
             nugget_id: nuggetId,
             text: ds.nuggetText,
@@ -729,7 +744,11 @@ function commitNugget() {
             created_by: usernameInput.value.trim() || 'anonymous',
             created_at: new Date().toISOString(),
             source_spans: ds.spans,
-            source_freetext: ds.freetext
+            source_freetext: ds.freetext,
+            // Creator metadata for export
+            llm_model: ds.llmModel || null,
+            source_data: sourceData,
+            is_human: true  // User-created nugget
         };
 
         // Add to local nugget bank
@@ -741,6 +760,11 @@ function commitNugget() {
 
         // Enable by default
         state.enabledNuggets[nuggetId] = true;
+    }
+
+    // Save nuggets to localStorage after any modification
+    if (typeof saveUserNuggets === 'function') {
+        saveUserNuggets();
     }
 
     // Save impact grades under the new hash-based ID

@@ -711,6 +711,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     padding: 12px 16px;
     border-radius: 0 6px 6px 0;
     margin-bottom: 16px;
+    user-select: text;
 }
 
 .query-box-label {
@@ -718,9 +719,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     text-transform: uppercase;
     color: #888;
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
 }
 
+.query-box-content {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #2c3e50;
+}
+
+.query-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: #2c3e50;
+    margin-bottom: 12px;
+}
+
+.query-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #ddd;
+}
+
+.query-section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #888;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.query-section-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #444;
+    white-space: pre-wrap;
+}
+
+/* Legacy - kept for backward compatibility */
 .query-box-text {
     font-size: 14px;
     line-height: 1.5;
@@ -786,6 +822,122 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     background: rgba(243, 156, 18, 0.25);
     border-left-color: #f39c12;
     box-shadow: inset 0 0 0 1px rgba(243, 156, 18, 0.2);
+}
+
+/* Class-based highlight colors (used with precedence) */
+.source-text-area .has-quote-highlight.highlight-must {
+    background: rgba(39, 174, 96, 0.1);
+    border-left-color: rgba(39, 174, 96, 0.3);
+}
+.source-text-area .has-quote-highlight.highlight-avoid {
+    background: rgba(231, 76, 60, 0.1);
+    border-left-color: rgba(231, 76, 60, 0.3);
+}
+.source-text-area .has-quote-highlight.highlight-should {
+    background: rgba(243, 156, 18, 0.1);
+    border-left-color: rgba(243, 156, 18, 0.3);
+}
+
+/* Heavy versions of class-based highlights */
+.source-text-area .has-quote-highlight.heavy-highlight.highlight-must {
+    background: rgba(39, 174, 96, 0.25);
+    border-left-color: #27ae60;
+}
+.source-text-area .has-quote-highlight.heavy-highlight.highlight-avoid {
+    background: rgba(231, 76, 60, 0.25);
+    border-left-color: #e74c3c;
+}
+.source-text-area .has-quote-highlight.heavy-highlight.highlight-should {
+    background: rgba(243, 156, 18, 0.25);
+    border-left-color: #f39c12;
+}
+
+/* Nugget badge on highlighted paragraphs */
+.nugget-badge {
+    display: inline-block;
+    background: #34495e;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-right: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    user-select: none;
+}
+.nugget-badge:hover {
+    background: #2c3e50;
+}
+
+/* Nugget popup */
+.nugget-popup {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 280px;
+    max-width: 400px;
+    max-height: 300px;
+    overflow: hidden;
+}
+.nugget-popup-header {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    font-size: 12px;
+    color: #666;
+}
+.nugget-popup-list {
+    max-height: 250px;
+    overflow-y: auto;
+}
+.nugget-popup-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    font-size: 13px;
+}
+.nugget-popup-item:last-child {
+    border-bottom: none;
+}
+.nugget-popup-item:hover {
+    background: #f8f9fa;
+}
+.nugget-popup-category {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 6px;
+}
+.nugget-popup-category.must {
+    background: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+}
+.nugget-popup-category.should {
+    background: rgba(243, 156, 18, 0.15);
+    color: #f39c12;
+}
+.nugget-popup-category.avoid {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+.nugget-popup-text {
+    color: #333;
+}
+
+/* Flash highlight for nugget rows when navigating from badge */
+.nugget-row.flash-highlight {
+    animation: flash-pulse 1.5s ease-out;
+}
+@keyframes flash-pulse {
+    0% { background-color: rgba(52, 152, 219, 0.4); }
+    100% { background-color: transparent; }
 }
 
 /* Selection prompt */

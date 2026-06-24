@@ -36,11 +36,39 @@ function renderSourcePanel() {
     // Build content
     var html = '';
 
-    // Query box
-    html += '<div class="query-box">';
+    // Query box with full details (title, problem_statement, background)
+    html += '<div class="query-box" id="queryBox">';
     html += '<div class="query-box-label">Query</div>';
-    html += '<div class="query-box-text">' + escapeHtml(request ? (request.query || request.title || request.problem_statement || '') : '') + '</div>';
-    html += '</div>';
+    html += '<div class="query-box-content">';
+
+    if (request) {
+        // Title/query line
+        var title = request.title || request.query || '';
+        if (title) {
+            html += '<div class="query-title">' + escapeHtml(title) + '</div>';
+        }
+
+        // Problem statement (if different from title)
+        var problemStatement = request.problem_statement || '';
+        if (problemStatement && problemStatement !== title) {
+            html += '<div class="query-section">';
+            html += '<div class="query-section-label">Problem Statement</div>';
+            html += '<div class="query-section-text">' + escapeHtml(problemStatement) + '</div>';
+            html += '</div>';
+        }
+
+        // Background (if available)
+        var background = request.background || '';
+        if (background) {
+            html += '<div class="query-section">';
+            html += '<div class="query-section-label">Background</div>';
+            html += '<div class="query-section-text">' + escapeHtml(background) + '</div>';
+            html += '</div>';
+        }
+    }
+
+    html += '</div>';  // query-box-content
+    html += '</div>';  // query-box
 
     // Report text area
     html += '<div class="source-text-area" id="sourceText">';
@@ -80,6 +108,9 @@ function renderReportText(report) {
     return html;
 }
 
+// Category precedence for highlights: avoid (highest) > must > should (lowest)
+var categoryPrecedence = { 'avoid': 3, 'must': 2, 'should': 1 };
+
 // Apply quote highlights based on nugget grades
 function applyQuoteHighlights() {
     if (!state.selectedTopic || !state.selectedRun) return;
@@ -87,11 +118,14 @@ function applyQuoteHighlights() {
     var sourceText = document.getElementById('sourceText');
     if (!sourceText) return;
 
-    // First, clear any existing highlights
+    // First, clear any existing highlights and badges
     sourceText.querySelectorAll('.has-quote-highlight').forEach(function(el) {
-        el.classList.remove('has-quote-highlight', 'heavy-highlight');
-        delete el.dataset.highlightNugget;
+        el.classList.remove('has-quote-highlight', 'heavy-highlight', 'highlight-avoid', 'highlight-must', 'highlight-should');
+        delete el.dataset.highlightNuggets;  // Now stores JSON array
         delete el.dataset.highlightCategory;
+    });
+    sourceText.querySelectorAll('.nugget-badge').forEach(function(el) {
+        el.remove();
     });
 
     // Get all nuggets for this topic (both nuggets and claims)
@@ -129,6 +163,123 @@ function applyQuoteHighlights() {
             console.warn('Quote text:', quote.substring(0, 100) + '...');
         }
     });
+
+    // After all highlights applied, add nugget count badges
+    addNuggetBadges(sourceText);
+}
+
+// Add [Xn] badges to highlighted paragraphs
+function addNuggetBadges(container) {
+    container.querySelectorAll('.has-quote-highlight').forEach(function(el) {
+        var nuggetIds = [];
+        try {
+            nuggetIds = JSON.parse(el.dataset.highlightNuggets || '[]');
+        } catch (e) {
+            nuggetIds = el.dataset.highlightNuggets ? [el.dataset.highlightNuggets] : [];
+        }
+
+        if (nuggetIds.length === 0) return;
+
+        // Create badge
+        var badge = document.createElement('span');
+        badge.className = 'nugget-badge';
+        badge.textContent = '[' + nuggetIds.length + 'n]';
+        badge.dataset.nuggetIds = JSON.stringify(nuggetIds);
+        badge.title = 'Click to see ' + nuggetIds.length + ' nugget(s) referencing this section';
+        badge.onclick = function(e) {
+            e.stopPropagation();
+            showNuggetPopup(e, nuggetIds);
+        };
+
+        // Insert at start of paragraph
+        el.insertBefore(badge, el.firstChild);
+    });
+}
+
+// Show popup with nuggets that reference this section
+function showNuggetPopup(event, nuggetIds) {
+    // Remove any existing popup
+    var existingPopup = document.querySelector('.nugget-popup');
+    if (existingPopup) existingPopup.remove();
+
+    // Get nugget details
+    var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
+    if (!bank) return;
+
+    var allNuggets = (bank.nuggets || []).concat(bank.claims || []);
+    var matchingNuggets = nuggetIds.map(function(id) {
+        return allNuggets.find(function(n) { return n.nugget_id === id; });
+    }).filter(Boolean);
+
+    if (matchingNuggets.length === 0) return;
+
+    // Create popup
+    var popup = document.createElement('div');
+    popup.className = 'nugget-popup';
+
+    var html = '<div class="nugget-popup-header">Nuggets (' + matchingNuggets.length + ')</div>';
+    html += '<div class="nugget-popup-list">';
+
+    matchingNuggets.forEach(function(nugget) {
+        var category = nugget.importance || nugget.quality || 'should_have';
+        var categoryClass = category === 'must_have' ? 'must' : (category === 'avoid' ? 'avoid' : 'should');
+        var text = nugget.text || nugget.question || '';
+        var preview = text.length > 400 ? text.substring(0, 400) + '...' : text;
+
+        html += '<div class="nugget-popup-item" data-nugget-id="' + escapeHtml(nugget.nugget_id) + '">';
+        html += '<span class="nugget-popup-category ' + categoryClass + '">' + categoryClass.toUpperCase() + '</span> ';
+        html += '<span class="nugget-popup-text">' + escapeHtml(preview) + '</span>';
+        html += '</div>';
+    });
+
+    html += '</div>';
+    popup.innerHTML = html;
+
+    // Position near click
+    popup.style.left = event.pageX + 'px';
+    popup.style.top = event.pageY + 'px';
+
+    document.body.appendChild(popup);
+
+    // Adjust if off-screen
+    var rect = popup.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        popup.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        popup.style.top = (event.pageY - rect.height - 10) + 'px';
+    }
+
+    // Click on item to scroll to nugget
+    popup.querySelectorAll('.nugget-popup-item').forEach(function(item) {
+        item.onclick = function() {
+            var nuggetId = item.dataset.nuggetId;
+            scrollToNuggetInPanel(nuggetId);
+            popup.remove();
+        };
+    });
+
+    // Click outside to close
+    setTimeout(function() {
+        document.addEventListener('click', function closePopup(e) {
+            if (!popup.contains(e.target)) {
+                popup.remove();
+                document.removeEventListener('click', closePopup);
+            }
+        });
+    }, 0);
+}
+
+// Scroll to a nugget in the nuggets panel and highlight it
+function scrollToNuggetInPanel(nuggetId) {
+    var nuggetRow = document.querySelector('.nugget-row[data-nugget-id="' + nuggetId + '"]');
+    if (nuggetRow) {
+        nuggetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nuggetRow.classList.add('flash-highlight');
+        setTimeout(function() {
+            nuggetRow.classList.remove('flash-highlight');
+        }, 1500);
+    }
 }
 
 // Highlight a specific quote in the source text
@@ -258,8 +409,35 @@ function highlightQuoteInSource(container, quoteText, category, nuggetId, isHeav
                     if (isHeavy) {
                         parent.classList.add('heavy-highlight');
                     }
-                    parent.dataset.highlightNugget = nuggetId;
-                    parent.dataset.highlightCategory = categoryClass;
+
+                    // Track multiple nuggets per paragraph
+                    var existingNuggets = [];
+                    try {
+                        existingNuggets = JSON.parse(parent.dataset.highlightNuggets || '[]');
+                    } catch (e) {
+                        existingNuggets = [];
+                    }
+                    if (existingNuggets.indexOf(nuggetId) === -1) {
+                        existingNuggets.push(nuggetId);
+                    }
+                    parent.dataset.highlightNuggets = JSON.stringify(existingNuggets);
+
+                    // Apply category with precedence: avoid > must > should
+                    var existingCategory = parent.dataset.highlightCategory || '';
+                    var existingPrecedence = categoryPrecedence[existingCategory] || 0;
+                    var newPrecedence = categoryPrecedence[categoryClass] || 0;
+
+                    if (newPrecedence > existingPrecedence) {
+                        // Remove old category class, add new one
+                        parent.classList.remove('highlight-avoid', 'highlight-must', 'highlight-should');
+                        parent.classList.add('highlight-' + categoryClass);
+                        parent.dataset.highlightCategory = categoryClass;
+                    } else if (!existingCategory) {
+                        // No existing category, set this one
+                        parent.classList.add('highlight-' + categoryClass);
+                        parent.dataset.highlightCategory = categoryClass;
+                    }
+
                     return true;  // Found and highlighted
                 }
                 parent = parent.parentElement;
@@ -272,40 +450,59 @@ function highlightQuoteInSource(container, quoteText, category, nuggetId, isHeav
 
 // Store pending text selection for span adding
 var pendingSpanText = '';
+var pendingSpanSourceType = 'report';  // "report" | "document" | "query"
+
+// Handle text selection for span adding (works on both source text and query box)
+// sourceType parameter indicates where the selection came from
+function handleTextSelection(e, sourceType) {
+    var selection = window.getSelection();
+    var text = selection.toString().trim();
+
+    if (text.length > 0 && state.draftState.visible) {
+        // Store the text and source type so they persist when clicking the prompt
+        pendingSpanText = text;
+        pendingSpanSourceType = sourceType || 'report';
+        var range = selection.getRangeAt(0);
+        var rect = range.getBoundingClientRect();
+        selectionPrompt.style.left = (rect.left + rect.width / 2 - 50) + 'px';
+        selectionPrompt.style.top = (rect.bottom + 8) + 'px';
+        selectionPrompt.classList.add('visible');
+    } else {
+        selectionPrompt.classList.remove('visible');
+        pendingSpanText = '';
+        pendingSpanSourceType = 'report';
+    }
+}
 
 // Attach selection handler for adding spans to draft
 function attachSourceSelectionHandler() {
     var sourceText = document.getElementById('sourceText');
-    if (!sourceText) return;
+    var queryBox = document.getElementById('queryBox');
 
-    sourceText.addEventListener('mouseup', function(e) {
-        var selection = window.getSelection();
-        var text = selection.toString().trim();
+    // Attach to source text (report content)
+    if (sourceText) {
+        sourceText.addEventListener('mouseup', function(e) {
+            handleTextSelection(e, 'report');
+        });
 
-        if (text.length > 0 && state.draftState.visible) {
-            // Store the text so it persists when clicking the prompt
-            pendingSpanText = text;
-            var range = selection.getRangeAt(0);
-            var rect = range.getBoundingClientRect();
-            selectionPrompt.style.left = (rect.left + rect.width / 2 - 50) + 'px';
-            selectionPrompt.style.top = (rect.bottom + 8) + 'px';
-            selectionPrompt.classList.add('visible');
-        } else {
-            selectionPrompt.classList.remove('visible');
-            pendingSpanText = '';
-        }
-    });
+        // Citation marker click handler
+        sourceText.addEventListener('click', function(e) {
+            if (e.target.classList.contains('citation-marker')) {
+                var docId = e.target.dataset.docId;
+                showCitationModal(docId);
+            }
+        });
+    }
 
-    // Citation marker click handler
-    sourceText.addEventListener('click', function(e) {
-        if (e.target.classList.contains('citation-marker')) {
-            var docId = e.target.dataset.docId;
-            showCitationModal(docId);
-        }
-    });
+    // Attach to query box (allows selecting from query/problem_statement/background)
+    if (queryBox) {
+        queryBox.addEventListener('mouseup', function(e) {
+            handleTextSelection(e, 'query');
+        });
+    }
 }
 
-// Selection prompt click handler (uses stored pendingSpanText)
+// Selection prompt click handler (uses stored pendingSpanText and pendingSpanSourceType)
 if (selectionPrompt) {
     selectionPrompt.addEventListener('mousedown', function(e) {
         // Use mousedown to capture before selection is cleared
@@ -313,20 +510,23 @@ if (selectionPrompt) {
         e.stopPropagation();
 
         if (pendingSpanText && state.draftState.visible) {
-            addSpanToDraft(pendingSpanText);
+            addSpanToDraft(pendingSpanText, pendingSpanSourceType);
             window.getSelection().removeAllRanges();
             selectionPrompt.classList.remove('visible');
             pendingSpanText = '';
+            pendingSpanSourceType = 'report';
         }
     });
 }
 
-// Add a span to the draft card
-function addSpanToDraft(text) {
+// Add a span to the draft card with source type tracking
+// sourceType: "report" | "document" | "query"
+function addSpanToDraft(text, sourceType) {
     state.draftState.spans.push({
         text: text,
         start: 0,  // TODO: compute actual offsets if needed
-        end: text.length
+        end: text.length,
+        sourceType: sourceType || 'report'
     });
     renderDraftSpans();
 }

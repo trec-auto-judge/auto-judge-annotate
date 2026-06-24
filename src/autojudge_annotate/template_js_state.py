@@ -26,11 +26,12 @@ var state = {
   // Draft card state (new nugget creation)
   draftState: {
     visible: false,
-    spans: [],  // [{start, end, text}]
+    spans: [],  // [{start, end, text, sourceType}] sourceType: "report" | "document" | "query"
     freetext: "",
     nuggetText: "",
     category: "must_have",  // "must_have" | "should_have" | "avoid"
     canonicalized: false,
+    llmModel: null,  // LLM model used for canonicalization (e.g., "gpt-oss-120b")
     impactVisible: false,
     impactResults: []  // [{runId, quote, confidence}]
   },
@@ -179,6 +180,34 @@ if (DATA.nugget_grades) {
       });
     });
   });
+}
+
+// All nuggets are managed in localStorage. Preloaded nuggets seed the initial state.
+// On first load (no saved nuggets), copy preloaded nuggets to localStorage.
+// After that, localStorage is the source of truth.
+var savedUserNuggets = localStorage.getItem("autojudge_annotate_user_nuggets_" + DATA.dataset);
+if (savedUserNuggets) {
+  // Load from localStorage - this is the source of truth
+  try {
+    var userNuggetsData = JSON.parse(savedUserNuggets);
+    // Replace DATA.nugget_banks with saved data
+    DATA.nugget_banks = userNuggetsData;
+  } catch(e) {
+    console.error('Failed to load user nuggets:', e);
+  }
+} else {
+  // First load - preloaded nuggets seed the user space
+  // DATA.nugget_banks already contains preloaded nuggets, so just save them
+  if (DATA.nugget_banks && Object.keys(DATA.nugget_banks).length > 0) {
+    localStorage.setItem("autojudge_annotate_user_nuggets_" + DATA.dataset, JSON.stringify(DATA.nugget_banks));
+  }
+}
+
+// Save all nuggets to localStorage (called after any modification)
+function saveUserNuggets() {
+  if (DATA.nugget_banks) {
+    localStorage.setItem("autojudge_annotate_user_nuggets_" + DATA.dataset, JSON.stringify(DATA.nugget_banks));
+  }
 }
 
 // Save user nugget grades to localStorage
@@ -503,6 +532,126 @@ function buildOutputRecords(includeAll) {
 
 function buildOutputLines() {
   return buildOutputRecords().map(function(r) { return JSON.stringify(r.record); });
+}
+
+// Build NuggetBanks output in JSONL format (one line per topic)
+// Format matches autojudge_base.nugget_data.NuggetBanks schema
+function buildNuggetBanksOutput() {
+  var lines = [];
+  var username = usernameInput.value.trim() || 'annotator';
+
+  topicIds.forEach(function(topicId) {
+    var request = requestMap[topicId];
+    var bank = DATA.nugget_banks && DATA.nugget_banks[topicId];
+
+    // Get user-created nuggets for this topic
+    var userNuggets = typeof getCanonicalizedNuggetsForTopic === 'function'
+      ? getCanonicalizedNuggetsForTopic(topicId)
+      : [];
+
+    // Skip topics with no nuggets
+    var preloadedNuggets = bank ? (bank.nuggets || []) : [];
+    if (preloadedNuggets.length === 0 && userNuggets.length === 0) {
+      return;
+    }
+
+    // Build nugget_bank dict (keyed by question text)
+    // All nuggets go here, including "avoid" (they are not claims)
+    var nuggetBank = {};
+
+    // Process pre-loaded nuggets (those without is_human: true flag)
+    preloadedNuggets.forEach(function(n) {
+      // Skip user-created nuggets (will be handled below)
+      if (n.is_human === true) return;
+
+      var questionText = n.text || n.question || '';
+      if (!questionText) return;
+
+      var nuggetId = n.nugget_id || md5(questionText);
+      var importance = n.importance || 'should_have';
+
+      // Use existing creator info if available, otherwise default to preloaded
+      var creatorInfo = n.creator || [{
+        is_human: false,
+        llm_model: 'preloaded',
+        source_data: n.references || null
+      }];
+
+      // Create NuggetQuestion object
+      nuggetBank[questionText] = {
+        question: questionText,
+        question_id: nuggetId,
+        query_id: topicId,
+        importance: importance,
+        creator: creatorInfo
+      };
+    });
+
+    // Process user-created nuggets (all go into nugget_bank, including avoid)
+    // These have is_human: true flag set by commitNugget
+    preloadedNuggets.forEach(function(n) {
+      // Only process user-created nuggets
+      if (n.is_human !== true) return;
+
+      var nuggetText = n.text || n.question || '';
+      if (!nuggetText) return;
+
+      var nuggetId = n.nugget_id || md5(nuggetText);
+      var importance = n.importance || 'should_have';
+
+      // Build creator object with stored metadata
+      var creatorObj = {
+        is_human: true,
+        assessor_id: n.created_by || username
+      };
+
+      // Add LLM model if used for canonicalization
+      if (n.llm_model) {
+        creatorObj.llm_model = n.llm_model;
+        creatorObj.llm_prompt_strategy = 'canonicalized_from_spans';
+      }
+
+      // Add source_data (report, document, query)
+      if (n.source_data) {
+        creatorObj.source_data = n.source_data;
+      }
+
+      // Add creation timestamp
+      if (n.created_at) {
+        creatorObj.created_at = n.created_at;
+      }
+
+      nuggetBank[nuggetText] = {
+        question: nuggetText,
+        question_id: nuggetId,
+        query_id: topicId,
+        importance: importance,
+        creator: [creatorObj],
+        metadata: {
+          source_spans: n.source_spans || null,
+          freetext_notes: n.source_freetext || null
+        }
+      };
+    });
+
+    // Build NuggetBank object
+    var nuggetBankObj = {
+      query_id: topicId,
+      title_query: request ? (request.title || request.query || topicId) : topicId,
+      format_version: 'v3',
+      test_collection: DATA.dataset || null
+    };
+
+    // Only include non-empty bank
+    if (Object.keys(nuggetBank).length > 0) {
+      nuggetBankObj.nugget_bank = nuggetBank;
+    }
+
+    // Add the line
+    lines.push(JSON.stringify(nuggetBankObj));
+  });
+
+  return lines;
 }
 
 // --- Centralized Reset Function ---

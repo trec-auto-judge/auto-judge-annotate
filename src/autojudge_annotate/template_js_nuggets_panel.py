@@ -212,7 +212,7 @@ function renderNuggetRow(nugget, categoryKey) {
     if (!enabled && !soloed) rowClass += ' disabled';
     if (soloed) rowClass += ' soloed';
 
-    var html = '<div class="' + rowClass + '" id="nugget-' + escapeHtml(nuggetId) + '">';
+    var html = '<div class="' + rowClass + '" id="nugget-' + escapeHtml(nuggetId) + '" data-nugget-id="' + escapeHtml(nuggetId) + '">';
 
     // QC controls (solo + checkbox) - only in QC phase
     if (isQC) {
@@ -462,7 +462,7 @@ function toggleQuoteHighlight(nuggetId) {
 
         // Try to scroll to the quote
         if (state.heavyHighlightNuggetId === nuggetId) {
-            var highlighted = document.querySelector('.has-quote-highlight[data-highlight-nugget="' + nuggetId + '"]');
+            var highlighted = findHighlightedParagraphForNugget(nuggetId);
             if (highlighted) {
                 highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else {
@@ -613,13 +613,30 @@ async function findQuoteForNugget(nuggetId) {
     }
 }
 
+// Find a highlighted paragraph that includes a specific nugget ID
+// (nuggetIds are stored as JSON array in data-highlight-nuggets)
+function findHighlightedParagraphForNugget(nuggetId) {
+    var sourceText = document.getElementById('sourceText');
+    if (!sourceText) return null;
+
+    var allHighlighted = sourceText.querySelectorAll('.has-quote-highlight[data-highlight-nuggets]');
+    for (var i = 0; i < allHighlighted.length; i++) {
+        var el = allHighlighted[i];
+        try {
+            var nuggetIds = JSON.parse(el.dataset.highlightNuggets || '[]');
+            if (nuggetIds.indexOf(nuggetId) !== -1) {
+                return el;
+            }
+        } catch (e) {
+            // Ignore parse errors
+        }
+    }
+    return null;
+}
+
 // Scroll to highlighted quote in source panel
 function scrollToQuoteInSource(nuggetId) {
-    var sourceText = document.getElementById('sourceText');
-    if (!sourceText) return;
-
-    // Find the highlighted paragraph
-    var highlighted = sourceText.querySelector('.has-quote-highlight[data-highlight-nugget="' + nuggetId + '"]');
+    var highlighted = findHighlightedParagraphForNugget(nuggetId);
     if (highlighted) {
         highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
