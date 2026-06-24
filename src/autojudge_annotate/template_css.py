@@ -1969,4 +1969,199 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* Utility classes */
 .hidden { display: none !important; }
 .visible { display: flex !important; }
+
+/* Help Button */
+.help-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #666;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: 8px;
+}
+.help-btn:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
+/* Help Modal */
+.help-modal {
+    max-width: 520px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+    position: relative;
+}
+
+.help-modal h2 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    color: #2c3e50;
+}
+
+.help-modal .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
+.help-section {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.help-section:last-of-type {
+    border-bottom: none;
+}
+
+.help-section h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #3498db;
+}
+
+.help-section ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.help-section li {
+    margin-bottom: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #444;
+}
+
+.help-section code {
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.help-footer {
+    margin: 16px 0 0 0;
+    text-align: center;
+    font-size: 13px;
+}
+
+.help-footer a {
+    color: #3498db;
+    text-decoration: none;
+}
+.help-footer a:hover {
+    text-decoration: underline;
+}
+
+.help-full-btn {
+    background: #3498db;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.help-full-btn:hover {
+    background: #2980b9;
+}
+.help-version {
+    display: block;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #999;
+}
+
+/* Full Guide Modal */
+.guide-modal {
+    max-width: 700px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 32px;
+    position: relative;
+}
+
+.guide-modal .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+}
+
+.guide-content {
+    line-height: 1.6;
+    color: #333;
+}
+
+.guide-content h1 {
+    font-size: 24px;
+    color: #2c3e50;
+    margin: 0 0 24px 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #3498db;
+}
+
+.guide-content h2 {
+    font-size: 18px;
+    color: #2c3e50;
+    margin: 24px 0 12px 0;
+}
+
+.guide-content h3 {
+    font-size: 14px;
+    color: #3498db;
+    margin: 16px 0 8px 0;
+}
+
+.guide-content p {
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.guide-content ul, .guide-content ol {
+    margin: 8px 0;
+    padding-left: 24px;
+}
+
+.guide-content li {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+.guide-content hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+}
+
+.guide-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 12px;
+}
+
+.guide-content th, .guide-content td {
+    border: 1px solid #e5e7eb;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.guide-content th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #374151;
+}
+
+.guide-content code {
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
 """

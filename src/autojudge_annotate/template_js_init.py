@@ -112,10 +112,56 @@ if (typeof renderAll === "function") {
   renderMain();
 }
 
+// --- Help Modal ---
+function showHelp() {
+    var overlay = document.getElementById('help-modal-overlay');
+    if (overlay) overlay.classList.add('visible');
+}
+
+function hideHelp() {
+    var overlay = document.getElementById('help-modal-overlay');
+    if (overlay) overlay.classList.remove('visible');
+}
+
+// Close help modal on overlay click
+(function() {
+    var overlay = document.getElementById('help-modal-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) hideHelp();
+        });
+    }
+})();
+
+// --- Full Guide Modal ---
+function showFullGuide() {
+    var overlay = document.getElementById('guide-modal-overlay');
+    if (overlay) overlay.classList.add('visible');
+}
+
+function hideFullGuide() {
+    var overlay = document.getElementById('guide-modal-overlay');
+    if (overlay) overlay.classList.remove('visible');
+}
+
+// Close full guide modal on overlay click
+(function() {
+    var overlay = document.getElementById('guide-modal-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) hideFullGuide();
+        });
+    }
+})();
+
 // --- Global Exports ---
 // Expose functions to window for onclick handlers in HTML
 // (functions defined in IIFE are not accessible to inline onclick otherwise)
 
+window.showHelp = typeof showHelp === "function" ? showHelp : function() {};
+window.hideHelp = typeof hideHelp === "function" ? hideHelp : function() {};
+window.showFullGuide = typeof showFullGuide === "function" ? showFullGuide : function() {};
+window.hideFullGuide = typeof hideFullGuide === "function" ? hideFullGuide : function() {};
 window.setPhase = typeof setPhase === "function" ? setPhase : function() {};
 window.goBack = typeof goBack === "function" ? goBack : function() {};
 window.setRankingScope = typeof setRankingScope === "function" ? setRankingScope : function() {};
