@@ -454,46 +454,48 @@ async function checkImpact() {
     // Queue all grading tasks concurrently (only for reports needing grades)
     var gradePromises = reportsNeedingGrade.map(function(runId) {
         return (typeof queueLlmTask === 'function' ? queueLlmTask : function(fn) { return fn(); })(async function() {
-            var report = runs[runId];
-            // Use sentence.text (matches rendered text) for quote extraction
-            var passage = '';
-            if (report.sentences && report.sentences.length > 0) {
-                passage = report.sentences.map(function(s) { return s.text || ''; }).join(' ');
-            }
-            if (!passage) passage = report.response_text || '';
-
-            if (!passage) {
-                if (typeof incrementProgress === 'function') incrementProgress();
-                return null;
-            }
-
-            // Build grading prompt
-            var prompt;
-            if (isAvoidNugget) {
-                prompt = '## Anti-Nugget (content to avoid)\n' + ds.nuggetText + '\n\n';
-                prompt += '## Passage to evaluate\n' + passage.substring(0, 8000) + '\n\n';
-                prompt += '## Task\n';
-                prompt += 'Check if the passage contains the problematic content described in the anti-nugget.\n';
-                prompt += 'Grade 0 = content is NOT present (good), Grade 5 = content IS clearly present (bad).\n\n';
-            } else {
-                prompt = '## Question\n' + ds.nuggetText + '\n\n';
-                prompt += '## Passage\n' + passage.substring(0, 8000) + '\n\n';
-                prompt += '## Task\n';
-                prompt += 'Grade how well the passage answers the question.\n\n';
-            }
-
-            prompt += 'Respond with JSON in this exact format:\n';
-            prompt += '{\n';
-            prompt += '  "grade": "0-5",\n';
-            prompt += '  "reasoning": "Brief explanation of the grade",\n';
-            prompt += '  "confidence": 0.0-1.0\n';
-            prompt += '}\n\n';
-            prompt += 'Only respond with the JSON, no other text.';
-
+            // Use try-finally to GUARANTEE progress increments, even on unexpected errors
+            var impactResult = null;
             try {
+                var report = runs[runId];
+                // Use sentence.text (matches rendered text) for quote extraction
+                var passage = '';
+                if (report.sentences && report.sentences.length > 0) {
+                    passage = report.sentences.map(function(s) { return s.text || ''; }).join(' ');
+                }
+                if (!passage) passage = report.response_text || '';
+
+                if (!passage) {
+                    console.warn('No passage for', runId);
+                    return null;
+                }
+
+                // Build grading prompt
+                var prompt;
+                if (isAvoidNugget) {
+                    prompt = '## Anti-Nugget (content to avoid)\n' + ds.nuggetText + '\n\n';
+                    prompt += '## Passage to evaluate\n' + passage.substring(0, 8000) + '\n\n';
+                    prompt += '## Task\n';
+                    prompt += 'Check if the passage contains the problematic content described in the anti-nugget.\n';
+                    prompt += 'Grade 0 = content is NOT present (good), Grade 5 = content IS clearly present (bad).\n\n';
+                } else {
+                    prompt = '## Question\n' + ds.nuggetText + '\n\n';
+                    prompt += '## Passage\n' + passage.substring(0, 8000) + '\n\n';
+                    prompt += '## Task\n';
+                    prompt += 'Grade how well the passage answers the question.\n\n';
+                }
+
+                prompt += 'Respond with JSON in this exact format:\n';
+                prompt += '{\n';
+                prompt += '  "grade": "0-5",\n';
+                prompt += '  "reasoning": "Brief explanation of the grade",\n';
+                prompt += '  "confidence": 0.0-1.0\n';
+                prompt += '}\n\n';
+                prompt += 'Only respond with the JSON, no other text.';
+
                 var result = await callLlm(prompt, gradeSystemPrompt);
                 if (!result) {
-                    if (typeof incrementProgress === 'function') incrementProgress();
+                    console.warn('LLM returned null for', runId);
                     return null;
                 }
 
@@ -501,11 +503,20 @@ async function checkImpact() {
                 if (jsonStr.startsWith('```')) {
                     jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
                 }
-                var parsed = JSON.parse(jsonStr);
+
+                var parsed;
+                try {
+                    parsed = JSON.parse(jsonStr);
+                } catch (parseErr) {
+                    console.error('Grade JSON parse error for', runId, ':', parseErr.message);
+                    console.error('Raw response:', jsonStr.substring(0, 200));
+                    return null;
+                }
+
                 var grade = parseInt(parsed.grade, 10);
                 if (isNaN(grade) || grade < 0 || grade > 5) grade = 0;
 
-                var impactResult = {
+                impactResult = {
                     runId: runId,
                     grade: grade,
                     reasoning: parsed.reasoning || '',
@@ -549,25 +560,27 @@ async function checkImpact() {
                                     };
                                     if (normalizeFunc(passage).includes(normalizeFunc(quote))) {
                                         impactResult.quote = quote;
-                                        // Stop at first found
                                         break;
                                     }
                                 }
                             } catch (qErr) {
-                                console.warn('Quote extraction parse error:', qErr);
+                                console.warn('Quote parse error for', runId, ':', qErr.message);
                             }
                         }
                     }
                 }
 
-                results.push(impactResult);
-                if (typeof incrementProgress === 'function') incrementProgress();
+                if (impactResult) {
+                    results.push(impactResult);
+                }
                 return impactResult;
 
             } catch (err) {
-                console.error('Grade error for', runId, err);
-                if (typeof incrementProgress === 'function') incrementProgress();
+                console.error('Unexpected error grading', runId, ':', err);
                 return null;
+            } finally {
+                // ALWAYS increment progress, no matter what
+                if (typeof incrementProgress === 'function') incrementProgress();
             }
         });
     });
