@@ -458,15 +458,23 @@ function handleTextSelection(e, sourceType) {
     var selection = window.getSelection();
     var text = selection.toString().trim();
 
-    if (text.length > 0 && state.draftState.visible) {
-        // Store the text and source type so they persist when clicking the prompt
-        pendingSpanText = text;
-        pendingSpanSourceType = sourceType || 'report';
-        var range = selection.getRangeAt(0);
-        var rect = range.getBoundingClientRect();
-        selectionPrompt.style.left = (rect.left + rect.width / 2 - 50) + 'px';
-        selectionPrompt.style.top = (rect.bottom + 8) + 'px';
-        selectionPrompt.classList.add('visible');
+    if (text.length > 0 && state.phase === 'creation') {
+        if (!state.draftState.visible) {
+            // Auto-open draft dialog and add the span directly
+            showDraft();
+            addSpanToDraft(text, sourceType || 'report');
+            window.getSelection().removeAllRanges();
+            selectionPrompt.classList.remove('visible');
+        } else {
+            // Draft is open - show prompt to let user click to add
+            pendingSpanText = text;
+            pendingSpanSourceType = sourceType || 'report';
+            var range = selection.getRangeAt(0);
+            var rect = range.getBoundingClientRect();
+            selectionPrompt.style.left = (rect.left + rect.width / 2 - 50) + 'px';
+            selectionPrompt.style.top = (rect.bottom + 8) + 'px';
+            selectionPrompt.classList.add('visible');
+        }
     } else {
         selectionPrompt.classList.remove('visible');
         pendingSpanText = '';
