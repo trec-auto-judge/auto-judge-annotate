@@ -68,17 +68,16 @@ HTML_BLOCK = r"""
       <div class="ranking-header">
         <div class="ranking-header-top">
           <span class="ranking-title">System Ranking</span>
-          <div class="ranking-toggle" id="rankingToggle">
-            <button class="active" onclick="setRankingScope('all')">All Queries</button>
-            <button onclick="setRankingScope('single')">This Query</button>
+          <div class="ranking-controls" id="rankingControls">
+            <!-- Rendered by JS: query selector in Observe, nothing in QC -->
           </div>
         </div>
         <div class="metrics-bar" id="metricsBar">
-          <!-- Rendered by JS -->
+          <!-- Rendered by JS: column headers -->
         </div>
       </div>
       <div class="ranking-list" id="rankingList">
-        <!-- Rendered by JS -->
+        <!-- Rendered by JS: tabular ranking -->
       </div>
     </div>
   </div>

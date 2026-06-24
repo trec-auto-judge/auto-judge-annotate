@@ -136,4 +136,5 @@ window.unsoloAll = typeof unsoloAll === "function" ? unsoloAll : function() {};
 window.toggleNuggetEnabled = typeof toggleNuggetEnabled === "function" ? toggleNuggetEnabled : function() {};
 window.toggleQuoteHighlight = typeof toggleQuoteHighlight === "function" ? toggleQuoteHighlight : function() {};
 window.selectReportFromRanking = typeof selectReportFromRanking === "function" ? selectReportFromRanking : function() {};
+window.toggleAllQueries = typeof toggleAllQueries === "function" ? toggleAllQueries : function() {};
 """

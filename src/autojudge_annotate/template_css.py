@@ -1069,6 +1069,118 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     text-align: right;
 }
 
+/* Tabular Ranking Layout */
+.ranking-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.ranking-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.ranking-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.all-queries-toggle {
+    padding: 4px 10px;
+    font-size: 11px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+}
+.all-queries-toggle:hover { border-color: #3498db; background: #f8f9fa; }
+.all-queries-toggle.active {
+    background: #3498db;
+    color: #fff;
+    border-color: #3498db;
+}
+
+/* Table structure */
+.ranking-table {
+    display: table;
+    table-layout: auto;
+    border-collapse: collapse;
+    margin: 0 auto;
+}
+
+.ranking-header-row {
+    display: table-row;
+    background: #f8f9fa;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.ranking-row {
+    display: table-row;
+    cursor: pointer;
+}
+.ranking-row:hover { background: #f5f6fa; }
+.ranking-row.selected { background: #e8f4fc; }
+
+/* Column definitions using table-cell */
+.ranking-header-row > span,
+.ranking-row > span {
+    display: table-cell;
+    padding: 6px 4px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.ranking-header-row > span {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.col-rank {
+    text-align: center;
+    font-weight: 600;
+    color: #888;
+    padding-left: 8px !important;
+    padding-right: 4px !important;
+}
+.col-name {
+    text-align: left;
+    font-weight: 500;
+    color: #2c3e50;
+    padding-right: 12px !important;
+}
+.col-count {
+    text-align: center;
+    font-size: 11px;
+    color: #666;
+}
+.col-avg {
+    text-align: center;
+    font-size: 11px;
+}
+.col-cov {
+    text-align: center;
+    font-size: 11px;
+}
+.col-score {
+    text-align: right;
+    font-weight: 600;
+    color: #2c3e50;
+    padding-right: 8px !important;
+}
+.col-topics {
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+}
+
 /* Nuggets Panel (Right Column) */
 .nuggets-panel {
     width: 380px;
@@ -1109,6 +1221,151 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     font-size: 12px;
 }
 .new-nugget-btn:hover { background: #219a52; }
+
+/* Overview Panel (Observe Mode) */
+.overview-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.overview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+}
+
+.overview-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.overview-scope {
+    font-size: 12px;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.overview-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.overview-summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-stat {
+    text-align: center;
+}
+
+.summary-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #2563eb;
+}
+
+.summary-label {
+    font-size: 11px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.overview-section {
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.metric-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    border-left: 3px solid #e5e7eb;
+}
+
+.metric-card.good { border-left-color: #10b981; }
+.metric-card.neutral { border-left-color: #6b7280; }
+.metric-card.warning { border-left-color: #f59e0b; }
+.metric-card.bad { border-left-color: #ef4444; }
+
+.metric-card-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.metric-card-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.metric-card-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.metric-card-desc {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.metric-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.metric-bar-fill.good { background: #10b981; }
+.metric-bar-fill.neutral { background: #6b7280; }
+.metric-bar-fill.warning { background: #f59e0b; }
+.metric-bar-fill.bad { background: #ef4444; }
+
+/* Ranking Metrics Tags */
+.ranking-metrics {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.metric-tag {
+    font-size: 10px;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
 
 /* Solo Mode Bar */
 .solo-mode-bar {

@@ -82,8 +82,204 @@ function buildSourceDesc(grade, docGrades) {
     return desc;
 }
 
-// Render the nuggets panel
+// ============================================================================
+// Overview Panel (Observe Mode Only)
+// ============================================================================
+
+// Compute overview statistics for all topics and systems
+function computeOverviewStats() {
+    var isAllQueries = state.rankingScope === 'all';
+    var allRunIds = getAllRunIds();
+    var totalSystems = allRunIds.length;
+
+    // Count nuggets across relevant topics
+    var nuggetCoverage = {};  // nuggetId -> { covered: count, total: count }
+    var systemCoverage = {};  // runId -> { covered: count, total: count }
+
+    var relevantTopics = isAllQueries ? topicIds : (state.selectedTopic ? [state.selectedTopic] : []);
+
+    relevantTopics.forEach(function(topicId) {
+        var bank = DATA.nugget_banks && DATA.nugget_banks[topicId];
+        var nuggets = bank ? (bank.nuggets || []) : [];
+
+        nuggets.forEach(function(nugget) {
+            var nuggetId = nugget.nugget_id;
+            if (state.enabledNuggets[nuggetId] === false) return;
+
+            if (!nuggetCoverage[nuggetId]) {
+                nuggetCoverage[nuggetId] = { covered: 0, total: 0 };
+            }
+
+            var runs = reportIndex[topicId] || {};
+            Object.keys(runs).forEach(function(runId) {
+                nuggetCoverage[nuggetId].total++;
+
+                if (!systemCoverage[runId]) {
+                    systemCoverage[runId] = { covered: 0, total: 0 };
+                }
+                systemCoverage[runId].total++;
+
+                var grade = getReportGrade(topicId, runId, nuggetId);
+                if (grade && grade.grade >= 4) {
+                    nuggetCoverage[nuggetId].covered++;
+                    systemCoverage[runId].covered++;
+                }
+            });
+        });
+    });
+
+    // Compute nugget distribution
+    var discriminativeNuggets = 0;  // 10-80% coverage
+    var universalNuggets = 0;       // >80% coverage
+    var hardNuggets = 0;            // <10% coverage
+    var totalNuggets = 0;
+
+    Object.keys(nuggetCoverage).forEach(function(nuggetId) {
+        var nc = nuggetCoverage[nuggetId];
+        if (nc.total === 0) return;
+        totalNuggets++;
+        var pct = nc.covered / nc.total;
+        if (pct >= 0.1 && pct <= 0.8) discriminativeNuggets++;
+        else if (pct > 0.8) universalNuggets++;
+        else hardNuggets++;
+    });
+
+    // Compute system distribution
+    var goodSystems = 0;   // >= 50% coverage
+    var poorSystems = 0;   // < 2% coverage
+
+    Object.keys(systemCoverage).forEach(function(runId) {
+        var sc = systemCoverage[runId];
+        if (sc.total === 0) return;
+        var pct = sc.covered / sc.total;
+        if (pct >= 0.5) goodSystems++;
+        else if (pct < 0.02) poorSystems++;
+    });
+
+    return {
+        totalNuggets: totalNuggets,
+        totalSystems: totalSystems,
+        discriminativeNuggets: discriminativeNuggets,
+        universalNuggets: universalNuggets,
+        hardNuggets: hardNuggets,
+        goodSystems: goodSystems,
+        poorSystems: poorSystems,
+        topicCount: relevantTopics.length
+    };
+}
+
+// Render the overview panel for Observe mode
+function renderOverviewPanel() {
+    var stats = computeOverviewStats();
+    var isAllQueries = state.rankingScope === 'all';
+
+    var html = '<div class="overview-panel">';
+
+    // Header
+    html += '<div class="overview-header">';
+    html += '<span class="overview-title">Overview</span>';
+    html += '</div>';
+
+    html += '<div class="overview-content">';
+
+    // Summary stats row
+    html += '<div class="overview-summary">';
+    html += '<div class="summary-stat">';
+    html += '<span class="summary-value">' + stats.totalNuggets + '</span>';
+    html += '<span class="summary-label">' + (isAllQueries ? 'Total Nuggets' : 'Nuggets') + '</span>';
+    html += '</div>';
+    html += '<div class="summary-stat">';
+    html += '<span class="summary-value">' + stats.totalSystems + '</span>';
+    html += '<span class="summary-label">' + (isAllQueries ? 'Total Systems' : 'Systems') + '</span>';
+    html += '</div>';
+    if (isAllQueries) {
+        html += '<div class="summary-stat">';
+        html += '<span class="summary-value">' + stats.topicCount + '</span>';
+        html += '<span class="summary-label">Queries</span>';
+        html += '</div>';
+    }
+    html += '</div>';
+
+    // Nugget Quality section
+    html += '<div class="overview-section">';
+    html += '<div class="section-title">Nugget Quality</div>';
+
+    // Discriminative nuggets card
+    var discPct = stats.totalNuggets > 0 ? Math.round(stats.discriminativeNuggets / stats.totalNuggets * 100) : 0;
+    html += '<div class="metric-card good">';
+    html += '<div class="metric-card-header">';
+    html += '<span class="metric-card-value">' + stats.discriminativeNuggets + '</span>';
+    html += '<span class="metric-card-label">Discriminative Nuggets</span>';
+    html += '</div>';
+    html += '<div class="metric-card-desc">Covered by 10-80% of systems</div>';
+    html += '<div class="metric-bar"><div class="metric-bar-fill good" style="width: ' + discPct + '%;"></div></div>';
+    html += '</div>';
+
+    // Universal nuggets card
+    var uniPct = stats.totalNuggets > 0 ? Math.round(stats.universalNuggets / stats.totalNuggets * 100) : 0;
+    html += '<div class="metric-card neutral">';
+    html += '<div class="metric-card-header">';
+    html += '<span class="metric-card-value">' + stats.universalNuggets + '</span>';
+    html += '<span class="metric-card-label">Universal Nuggets</span>';
+    html += '</div>';
+    html += '<div class="metric-card-desc">Covered by &gt;80% of systems (may be too easy)</div>';
+    html += '<div class="metric-bar"><div class="metric-bar-fill neutral" style="width: ' + uniPct + '%;"></div></div>';
+    html += '</div>';
+
+    // Hard nuggets card
+    var hardPct = stats.totalNuggets > 0 ? Math.round(stats.hardNuggets / stats.totalNuggets * 100) : 0;
+    html += '<div class="metric-card warning">';
+    html += '<div class="metric-card-header">';
+    html += '<span class="metric-card-value">' + stats.hardNuggets + '</span>';
+    html += '<span class="metric-card-label">Hard Nuggets</span>';
+    html += '</div>';
+    html += '<div class="metric-card-desc">Covered by &lt;10% of systems</div>';
+    html += '<div class="metric-bar"><div class="metric-bar-fill warning" style="width: ' + hardPct + '%;"></div></div>';
+    html += '</div>';
+
+    html += '</div>';  // section
+
+    // System Quality section
+    html += '<div class="overview-section">';
+    html += '<div class="section-title">System Quality</div>';
+
+    // Good systems card
+    var goodPct = stats.totalSystems > 0 ? Math.round(stats.goodSystems / stats.totalSystems * 100) : 0;
+    html += '<div class="metric-card good">';
+    html += '<div class="metric-card-header">';
+    html += '<span class="metric-card-value">' + stats.goodSystems + '</span>';
+    html += '<span class="metric-card-label">Good Systems</span>';
+    html += '</div>';
+    html += '<div class="metric-card-desc">Cover &ge;50% of nuggets</div>';
+    html += '<div class="metric-bar"><div class="metric-bar-fill good" style="width: ' + goodPct + '%;"></div></div>';
+    html += '</div>';
+
+    // Poor systems card
+    var poorPct = stats.totalSystems > 0 ? Math.round(stats.poorSystems / stats.totalSystems * 100) : 0;
+    html += '<div class="metric-card bad">';
+    html += '<div class="metric-card-header">';
+    html += '<span class="metric-card-value">' + stats.poorSystems + '</span>';
+    html += '<span class="metric-card-label">Poor Systems</span>';
+    html += '</div>';
+    html += '<div class="metric-card-desc">Cover &lt;2% of nuggets</div>';
+    html += '<div class="metric-bar"><div class="metric-bar-fill bad" style="width: ' + poorPct + '%;"></div></div>';
+    html += '</div>';
+
+    html += '</div>';  // section
+    html += '</div>';  // content
+    html += '</div>';  // overview-panel
+
+    nuggetsPanel.innerHTML = html;
+}
+
+// Render the nuggets panel (or overview panel in Observe mode)
 function renderNuggetsPanel() {
+    // In Observe mode, render overview panel instead
+    if (state.phase === 'observe') {
+        renderOverviewPanel();
+        return;
+    }
+
     if (!state.selectedTopic) {
         nuggetsPanel.innerHTML = '<div class="nuggets-header"><span class="nuggets-title">Nuggets</span></div><div class="empty-state">Select a query first.</div>';
         return;
@@ -95,7 +291,7 @@ function renderNuggetsPanel() {
     var allNuggets = nuggets.concat(claims);
     var isCreation = state.phase === 'creation';
     var isQC = state.phase === 'qc';
-    var isObserve = state.phase === 'observe';
+    var isObserve = false;  // Never true here since we return early
 
     var html = '';
 
