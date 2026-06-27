@@ -37,6 +37,9 @@ Then open `annotator.html` in a browser.
 | `--dataset` | Freetext label included in annotation output |
 | `--show-documents` | Enable citation document popups (increases file size) |
 | `--topic ID` | Filter to specific topics (repeatable) |
+| `--nugget-banks` | Nugget banks file (JSONL) with nugget questions and doc references |
+| `--nugget-grades` | Nugget grades file (JSONL) with per-report nugget grading results |
+| `--doc-grades` | Document grades file (JSONL) with per-doc/paragraph nugget grading results |
 | `--supabase-url` | Supabase project URL for cloud sync (optional) |
 | `--supabase-anon-key` | Supabase anon key for cloud sync (optional) |
 
@@ -52,6 +55,33 @@ autojudge-annotate generate \
     --dataset my-dataset \
     --topic 1101 --topic 1102 --topic 1103
 ```
+
+### Nugget-based annotation
+
+For nugget-based evaluation workflows, include pre-existing nugget banks and grades:
+
+```bash
+autojudge-annotate generate \
+    --rag-responses runs/ \
+    --rag-topics topics.jsonl \
+    --output annotator.html \
+    --dataset my-dataset \
+    --show-documents \
+    --nugget-banks nuggets.jsonl \
+    --nugget-grades report-grades.jsonl \
+    --doc-grades doc-grades.jsonl
+```
+
+This enables the Creation, QC, and Observe phases for nugget annotation:
+- **Creation**: Select text spans, canonicalize into nuggets, check impact
+- **QC**: Adjust weights, enable/disable nuggets, solo mode for debugging
+- **Observe**: Cross-query rankings and overview metrics
+
+### Online help
+
+The generated HTML includes built-in documentation accessible via the **?** button in the top bar:
+- **Quick Start Guide**: Condensed overview of the three-phase workflow
+- **Full Guide**: Detailed documentation of all features (click "Full Guide" at the bottom of Quick Start)
 
 ## Supabase setup (optional)
 
