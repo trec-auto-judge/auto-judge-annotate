@@ -135,16 +135,14 @@ function updateLlmIndicator() {
   if (!indicator) return;
 
   var apiKey = getLlmApiKey();
+  indicator.innerHTML = "&#x1F511;";
   if (!apiKey) {
-    indicator.textContent = "?";
     indicator.className = "llm-indicator llm-none";
     indicator.title = "Click to set OpenRouter API key";
   } else if (llmStatus === "error") {
-    indicator.innerHTML = "&#10007;";
     indicator.className = "llm-indicator llm-error";
     indicator.title = "LLM error - click to change API key";
   } else {
-    indicator.innerHTML = "&#10003;";
     indicator.className = "llm-indicator llm-ok";
     indicator.title = "LLM ready (" + LLM_MODEL + ") - click to change API key";
   }

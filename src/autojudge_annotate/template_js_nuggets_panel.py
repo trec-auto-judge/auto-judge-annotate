@@ -433,9 +433,13 @@ function renderNuggetRow(nugget, categoryKey) {
     html += '<span class="coverage-label">' + stats.reportsSatisfied + '/' + stats.reportsTotal + '</span>';
     html += '</div>';
 
-    // Edit button (not in Observe)
+    // Action buttons (not in Observe)
     if (!isObserve) {
-        html += '<button class="edit-btn" data-nugget-id="' + escapeHtml(nuggetId) + '">Edit</button>';
+        html += '<div class="nugget-actions">';
+        html += '<button class="nugget-action-btn edit-btn" data-nugget-id="' + escapeHtml(nuggetId) + '" title="Edit nugget">&#x270E;</button>';
+        html += '<button class="nugget-action-btn duplicate-btn" data-nugget-id="' + escapeHtml(nuggetId) + '" title="Duplicate nugget">&#x2398;</button>';
+        html += '<button class="nugget-action-btn delete-btn" data-nugget-id="' + escapeHtml(nuggetId) + '" title="Delete nugget">&#x2715;</button>';
+        html += '</div>';
     }
 
     // Report verdict (only in Creation with report selected)
@@ -533,6 +537,22 @@ function attachNuggetsPanelHandlers() {
             editNugget(nuggetId);
         });
     });
+
+    // Duplicate buttons
+    document.querySelectorAll('.duplicate-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var nuggetId = btn.dataset.nuggetId;
+            duplicateNugget(nuggetId);
+        });
+    });
+
+    // Delete buttons
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var nuggetId = btn.dataset.nuggetId;
+            deleteNugget(nuggetId);
+        });
+    });
 }
 
 // Edit an existing nugget - opens draft card with nugget data pre-filled
@@ -564,6 +584,70 @@ function editNugget(nuggetId) {
     };
 
     renderDraftCard();
+}
+
+// Duplicate an existing nugget - creates a clone in edit mode
+function duplicateNugget(nuggetId) {
+    // Find the nugget in the bank
+    var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
+    if (!bank) return;
+
+    var allNuggets = (bank.nuggets || []).concat(bank.claims || []);
+    var nugget = allNuggets.find(function(n) { return n.nugget_id === nuggetId; });
+    if (!nugget) return;
+
+    var nuggetText = nugget.text || nugget.question || '';
+
+    // Initialize draft state with nugget data as a NEW nugget (no originalNuggetId)
+    // This means commit will create a new entry rather than updating the original
+    state.draftState = {
+        visible: true,
+        originalNuggetId: null,  // null = create new nugget on commit
+        editingNuggetId: null,   // Will be generated on commit based on new text
+        spans: JSON.parse(JSON.stringify(nugget.source_spans || [])),  // Deep copy
+        freetext: nugget.source_freetext || '',
+        nuggetText: nuggetText,
+        category: nugget.importance || nugget.quality || 'should_have',
+        canonicalized: true,  // Already has nugget text
+        impactVisible: false,
+        impactResults: []
+    };
+
+    renderDraftCard();
+    showToast('Editing duplicate. Commit to save as new nugget.');
+}
+
+// Delete a nugget - removes from display but keeps grades cached
+function deleteNugget(nuggetId) {
+    // Find the nugget in the bank
+    var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
+    if (!bank) return;
+
+    var allNuggets = bank.nuggets || [];
+    var nuggetIndex = allNuggets.findIndex(function(n) { return n.nugget_id === nuggetId; });
+
+    if (nuggetIndex === -1) {
+        // Try claims
+        var claims = bank.claims || [];
+        var claimIndex = claims.findIndex(function(n) { return n.nugget_id === nuggetId; });
+        if (claimIndex !== -1) {
+            claims.splice(claimIndex, 1);
+        } else {
+            showToast('Nugget not found.');
+            return;
+        }
+    } else {
+        allNuggets.splice(nuggetIndex, 1);
+    }
+
+    // Note: We keep grades/quotes in state.userGrades - they're keyed by nugget_id
+    // which is a hash of the text. If the user re-creates the same nugget later,
+    // the cached grades will still be available.
+
+    showToast('Nugget deleted.');
+    renderNuggetsPanel();
+    updateRanking();
+    autoSave();
 }
 
 // Toggle solo mode for a nugget
@@ -721,6 +805,7 @@ async function findQuoteForNugget(nuggetId) {
             : [{ text: passage.substring(0, 8000), startOffset: 0 }];
 
         var quote = '';
+        var llmResponded = false;  // did any chunk actually get a model response?
         var normalizeFunc = typeof normalizeForMatching === 'function' ? normalizeForMatching : function(t) {
             return t.replace(/\s+/g, ' ').toLowerCase();
         };
@@ -745,6 +830,7 @@ async function findQuoteForNugget(nuggetId) {
             var result = await callLlm(prompt, 'Extract a contiguous verbatim quote from a passage that addresses a question.');
 
             if (result) {
+                llmResponded = true;
                 try {
                     var jsonStr = result.trim();
                     if (jsonStr.startsWith('```')) {
@@ -766,6 +852,15 @@ async function findQuoteForNugget(nuggetId) {
                     console.error('Quote parse error in chunk ' + (ci + 1) + ':', e);
                 }
             }
+        }
+
+        // If the model never responded (offline / all calls failed), do NOT record a
+        // "not found" result. Reset the button to its initial state so the user can retry.
+        if (!quote && !llmResponded) {
+            btn.textContent = 'Find Quote';
+            btn.classList.remove('loading');
+            showToast('Could not reach the model. Please check your connection and try again.');
+            return;
         }
 
         // Store the result (empty string means "attempted, not found")

@@ -1537,17 +1537,28 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     min-width: 30px;
 }
 
-/* Edit button */
-.edit-btn {
-    padding: 2px 8px;
+/* Nugget action buttons (edit, duplicate, delete) */
+.nugget-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.nugget-action-btn {
+    padding: 2px 6px;
     border: 1px solid #ddd;
     background: #fff;
     border-radius: 3px;
-    font-size: 10px;
+    font-size: 12px;
     cursor: pointer;
     color: #666;
+    line-height: 1;
 }
-.edit-btn:hover { background: #f5f6fa; }
+.nugget-action-btn:hover { background: #f5f6fa; }
+
+.edit-btn:hover { color: #2563eb; border-color: #2563eb; }
+.duplicate-btn:hover { color: #059669; border-color: #059669; }
+.delete-btn:hover { color: #dc2626; border-color: #dc2626; }
 
 /* Report Verdict (Creation phase with report selected) */
 .nugget-report {

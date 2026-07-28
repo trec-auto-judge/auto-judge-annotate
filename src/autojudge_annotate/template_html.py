@@ -40,7 +40,7 @@ HTML_BLOCK = r"""
       <span class="sync-status sync-idle" id="sync-status"></span>
     </span>
     <span id="llm-controls" class="llm-controls">
-      <span class="llm-indicator" id="llm-indicator" title="Click to set API key">?</span>
+      <span class="llm-indicator" id="llm-indicator" title="Click to set LLM API key">&#x1F511;</span>
     </span>
     <button id="export-btn" onclick="downloadAnnotations()">Export</button>
     <button class="primary progress-btn" id="grade-all-btn" onclick="gradeAllNuggets()">
@@ -122,7 +122,7 @@ HTML_BLOCK = r"""
     <div class="help-section">
       <h3>1. Setup</h3>
       <ul>
-        <li><b>API Key:</b> Click the <code>?</code> indicator (top-right) to set your OpenRouter API key</li>
+        <li><b>API Key:</b> Click the key icon <code>&#x1F511;</code> (top-right) to set your OpenRouter API key</li>
         <li><b>Username:</b> Enter your name in the username field</li>
       </ul>
     </div>
@@ -193,10 +193,10 @@ HTML_BLOCK = r"""
       <h3>1. Configure Your LLM API Key</h3>
       <p>Before creating nuggets, you need an OpenRouter API key for LLM-powered features.</p>
       <ol>
-        <li>Look for the <code>?</code> indicator in the top-right corner</li>
+        <li>Look for the key icon <code>&#x1F511;</code> in the top-right corner</li>
         <li>Click it to open the API key prompt</li>
         <li>Enter your OpenRouter API key</li>
-        <li>The indicator changes to <b>green checkmark</b> when ready</li>
+        <li>The indicator turns <b>green</b> when the key is set</li>
       </ol>
       <p>The key is stored in your browser's localStorage and persists across sessions.</p>
 
