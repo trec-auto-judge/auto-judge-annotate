@@ -1,6 +1,6 @@
 # Nugget Annotator User Guide
 
-*Version 1.0 — 2026-06-24*
+*Version 1.1 — 2026-11-09*
 
 A guide for creating and managing nuggets to evaluate RAG system outputs.
 
@@ -106,7 +106,13 @@ Click **Commit** to save the nugget permanently. It appears in the Nuggets panel
 
 ### Delete a Nugget
 
-Currently, delete by editing the nugget and removing all content, or disable it in QC phase.
+Click the **Delete** button on a nugget card to remove it. This works for both nuggets you
+created and preloaded ones. The removal is saved to your browser and (if server sync is on)
+recorded on the server as a tombstone. If you only want to keep a nugget out of the ranking,
+**disable** it in QC phase instead of deleting it.
+
+> Editing a nugget's **question text** is treated as a delete of the old nugget plus a new one,
+> because nuggets are identified by a hash of their text.
 
 ---
 
@@ -240,6 +246,30 @@ The exported JSONL integrates with:
 - Nugget-based judges for automated evaluation
 - Other evaluation tooling in the TREC ecosystem
 - Version control for annotation snapshots
+
+---
+
+## Server Sync (Supabase)
+
+If the annotator was built with Supabase credentials, a **sync control** appears in the
+top bar: an **online / offline** selector, a **status dot**, and a **Sync to Server** button.
+Sync is a **backup**: your work is pushed to the server, so you can recover it if the browser's
+local data is lost. (It is one-way for now — reopening on a fresh browser does *not* pull your
+work back down; use **Export** or keep the same browser to continue.)
+
+- **Online** mode pushes changes automatically a few seconds after you make them; the status
+  dot shows syncing / synced / error. **Offline** mode keeps everything local until you switch
+  back or click **Sync to Server**.
+- You must enter a **username** before anything syncs (your rows are keyed by it).
+- **What is backed up:** your document/report judgments, and every nugget you **create,
+  modify, delete, or enable/disable** — including changes to preloaded nuggets. Deletes are
+  stored as tombstones so the deletion itself is preserved.
+- **What is not backed up:** the global category **weights** and transient **solo** mode.
+- If a sync fails, your work stays safe in the browser; the app offers to switch to offline
+  mode so you can keep working, and you can retry later.
+
+If the sync control is absent, this build has no server configured and everything is
+local-only (see **Data Lost** under Troubleshooting).
 
 ---
 

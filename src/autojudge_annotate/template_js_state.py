@@ -257,6 +257,117 @@ function saveUserDocGrades() {
   safeLocalSet("autojudge_annotate_docgrades_" + DATA.dataset, JSON.stringify(state.userDocGrades));
 }
 
+// --- Nugget change-journal (backs the nuggets_current Supabase table) ------------------
+// Only TOUCHED nuggets are recorded: created, modified (same key upsert), text-edited
+// (tombstone old key + new key), deleted (tombstone), or enabled/disabled -- including
+// preloaded nuggets once touched. Untouched preloaded nuggets are never written. The
+// journal is persisted locally and pushed by nuggetSyncManager (template_js_sync.py).
+var NUGGET_SYNC_KEY = "autojudge_annotate_nugget_sync_" + DATA.dataset;
+
+(function loadNuggetSync() {
+  try {
+    var s = localStorage.getItem(NUGGET_SYNC_KEY);
+    state.nuggetSync = s ? JSON.parse(s) : {};
+  } catch (e) { state.nuggetSync = {}; }
+})();
+
+function saveNuggetSync() {
+  safeLocalSet(NUGGET_SYNC_KEY, JSON.stringify(state.nuggetSync || {}));
+}
+
+function nuggetSyncKey(topicId, nuggetId) { return topicId + "|" + nuggetId; }
+
+function findNuggetInTopic(topicId, nuggetId) {
+  var bank = DATA.nugget_banks && DATA.nugget_banks[topicId];
+  if (!bank) return null;
+  var arrays = [bank.nuggets || [], bank.claims || []];
+  for (var a = 0; a < arrays.length; a++) {
+    for (var i = 0; i < arrays[a].length; i++) {
+      if (arrays[a][i].nugget_id === nuggetId) return arrays[a][i];
+    }
+  }
+  return null;
+}
+
+function buildNuggetRecord(topicId, n) {
+  var text = n.text || n.question || "";
+  return {
+    dataset: DATA.dataset,
+    topic_id: topicId,
+    query_id: topicId,
+    username: (usernameInput.value || "").trim(),
+    nugget_id: n.nugget_id,
+    question: text,
+    importance: n.importance || n.quality || "should_have",
+    source: n.is_human === true ? "user" : "preloaded",
+    enabled: state.enabledNuggets[n.nugget_id] !== false,
+    created_by: n.created_by || null,
+    created_at: n.created_at || null,
+    updated_by: n.updated_by || null,
+    updated_at: n.updated_at || new Date().toISOString(),
+    llm_model: n.llm_model || null,
+    source_data: n.source_data || null,
+    source_spans: n.source_spans || null,
+    source_freetext: n.source_freetext || null,
+    deleted: false
+  };
+}
+
+function buildNuggetTombstone(topicId, nuggetId, text) {
+  return {
+    dataset: DATA.dataset,
+    topic_id: topicId,
+    query_id: topicId,
+    username: (usernameInput.value || "").trim(),
+    nugget_id: nuggetId,
+    question: text || null,
+    deleted: true,
+    deleted_at: new Date().toISOString()
+  };
+}
+
+function journalNuggetRecord(key, record) {
+  if (!state.nuggetSync) state.nuggetSync = {};
+  state.nuggetSync[key] = record;
+  saveNuggetSync();
+  if (typeof nuggetSyncManager !== "undefined" && nuggetSyncManager) {
+    nuggetSyncManager.syncDebounced();
+  }
+}
+
+// Upsert the current state of an existing nugget (create / in-place modify / enable toggle).
+function journalNuggetById(topicId, nuggetId) {
+  var n = findNuggetInTopic(topicId, nuggetId);
+  if (!n) return;
+  journalNuggetRecord(nuggetSyncKey(topicId, nuggetId), buildNuggetRecord(topicId, n));
+}
+
+// Tombstone a nugget by its (now-removed) object.
+function journalNuggetDelete(topicId, nugget) {
+  if (!nugget || !nugget.nugget_id) return;
+  journalNuggetRecord(nuggetSyncKey(topicId, nugget.nugget_id),
+    buildNuggetTombstone(topicId, nugget.nugget_id, nugget.text || nugget.question || null));
+}
+
+// Tombstone a nugget by id only (used for the old id when a text edit changes the key).
+function journalNuggetDeleteById(topicId, nuggetId, text) {
+  journalNuggetRecord(nuggetSyncKey(topicId, nuggetId),
+    buildNuggetTombstone(topicId, nuggetId, text || null));
+}
+
+// Records fed to nuggetSyncManager: the whole journal, with username stamped fresh.
+function buildNuggetSyncRecords(includeAll) {
+  var out = [];
+  var uname = (usernameInput.value || "").trim();
+  var journal = state.nuggetSync || {};
+  Object.keys(journal).forEach(function(key) {
+    var rec = journal[key];
+    if (!rec.username && uname) rec.username = uname;
+    out.push({ key: key, record: rec });
+  });
+  return out;
+}
+
 // Save phase to localStorage (called from setPhase in template_js_phase.py)
 function savePhase() {
   localStorage.setItem("autojudge_annotate_phase_" + DATA.dataset, state.phase);

@@ -145,6 +145,7 @@ HTML_BLOCK = r"""
         <li><b>Grade All:</b> Grades all nuggets against all reports</li>
         <li><b>Find Quote:</b> Extracts supporting text from the report</li>
         <li><b>Edit:</b> Click the edit button next to any nugget to modify it</li>
+        <li><b>Delete:</b> Click delete to remove a nugget (preloaded ones too)</li>
       </ul>
     </div>
 
@@ -167,16 +168,18 @@ HTML_BLOCK = r"""
     </div>
 
     <div class="help-section">
-      <h3>6. Export</h3>
+      <h3>6. Export &amp; Sync</h3>
       <ul>
         <li>Click <b>Export</b> to download nuggets as JSONL</li>
         <li>Use exported file with nugget-based judges</li>
+        <li><b>Server sync</b> (if configured): set a username, pick <b>online</b> to back up
+            judgments and nugget edits automatically, or click <b>Sync to Server</b></li>
       </ul>
     </div>
 
     <p class="help-footer">
       <button class="help-full-btn" onclick="hideHelp(); showFullGuide();">Full Guide &rarr;</button>
-      <span class="help-version">v1.0 &mdash; 2026-06-24</span>
+      <span class="help-version">v1.1 &mdash; 2026-11-09</span>
     </p>
   </div>
 </div>
@@ -279,6 +282,14 @@ HTML_BLOCK = r"""
         <li>Click <b>Re-canonicalize</b> if you changed the text</li>
         <li>Click <b>Commit</b> to save changes</li>
       </ol>
+      <p>Changing a nugget's <b>question text</b> is treated as a delete of the old nugget plus
+      a new one, because nuggets are identified by a hash of their text.</p>
+
+      <h3>Delete a Nugget</h3>
+      <p>Click the <b>Delete</b> button on a nugget card to remove it (works for preloaded
+      nuggets too). The removal is saved to your browser and, if server sync is on, recorded on
+      the server as a tombstone. To keep a nugget but exclude it from the ranking, <b>disable</b>
+      it in QC phase instead.</p>
 
       <hr>
 
@@ -361,6 +372,24 @@ HTML_BLOCK = r"""
       <h2>Exporting Your Work</h2>
       <p>Click <b>Export</b> to download a JSONL file containing all nuggets, grades, and metadata.</p>
       <p>The exported file integrates with nugget-based judges and other evaluation tooling.</p>
+
+      <hr>
+
+      <h2>Server Sync (Supabase)</h2>
+      <p>If this annotator was built with Supabase credentials, a <b>sync control</b> appears in
+      the top bar (an online/offline selector, a status dot, and a <b>Sync to Server</b> button).
+      Sync is a <b>backup</b>: your work is pushed to the server so it can be recovered if the
+      browser's local data is lost. It is currently one-way &mdash; reopening on a fresh browser
+      does not pull your work back down, so keep using the same browser or rely on <b>Export</b>.</p>
+      <ul>
+        <li><b>Online</b> pushes changes automatically a few seconds after each edit;
+            <b>Offline</b> keeps everything local until you switch back or click <b>Sync to Server</b>.</li>
+        <li>You must enter a <b>username</b> before anything syncs.</li>
+        <li><b>Backed up:</b> document/report judgments, and every nugget you create, modify,
+            delete, or enable/disable (preloaded nuggets included; deletes are stored as tombstones).</li>
+        <li><b>Not backed up:</b> the global category weights and transient solo mode.</li>
+        <li>If a sync fails your work stays safe locally; the app offers to switch to offline mode.</li>
+      </ul>
 
       <hr>
 

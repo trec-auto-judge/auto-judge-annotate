@@ -623,6 +623,10 @@ function deleteNugget(nuggetId) {
     var bank = DATA.nugget_banks && DATA.nugget_banks[state.selectedTopic];
     if (!bank) return;
 
+    // Capture the nugget before removal so the Supabase sync can tombstone it.
+    var removedNugget = (typeof findNuggetInTopic === 'function')
+        ? findNuggetInTopic(state.selectedTopic, nuggetId) : null;
+
     var allNuggets = bank.nuggets || [];
     var nuggetIndex = allNuggets.findIndex(function(n) { return n.nugget_id === nuggetId; });
 
@@ -643,6 +647,19 @@ function deleteNugget(nuggetId) {
     // Note: We keep grades/quotes in state.userGrades - they're keyed by nugget_id
     // which is a hash of the text. If the user re-creates the same nugget later,
     // the cached grades will still be available.
+
+    // Persist the bank removal to localStorage -- otherwise the in-memory splice is lost on
+    // reload and the nugget is restored from the stale saved bank ("back from the dead").
+    if (typeof saveUserNuggets === 'function') {
+        saveUserNuggets();
+    }
+
+    // Record the delete as a tombstone for Supabase sync (works for preloaded nuggets too).
+    if (typeof journalNuggetDelete === 'function' && removedNugget) {
+        journalNuggetDelete(state.selectedTopic, removedNugget);
+    } else if (typeof journalNuggetDeleteById === 'function') {
+        journalNuggetDeleteById(state.selectedTopic, nuggetId, null);
+    }
 
     showToast('Nugget deleted.');
     renderNuggetsPanel();
@@ -688,6 +705,11 @@ function unsoloAll() {
 // Toggle nugget enabled state
 function toggleNuggetEnabled(nuggetId, enabled) {
     state.enabledNuggets[nuggetId] = enabled;
+
+    // Enable/disable is a modification -> record it for Supabase sync (preloaded included).
+    if (typeof journalNuggetById === 'function') {
+        journalNuggetById(state.selectedTopic, nuggetId);
+    }
 
     // Update row visual
     var row = document.getElementById('nugget-' + nuggetId);

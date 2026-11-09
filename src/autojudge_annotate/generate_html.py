@@ -665,6 +665,38 @@ DROP TRIGGER IF EXISTS set_updated_at ON annotations_current;
 CREATE TRIGGER set_updated_at
     BEFORE UPDATE ON annotations_current
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Nugget change-journal: user-created nuggets plus any created/modified/deleted nugget
+-- (including preloaded ones once touched). A delete is stored as a row with
+-- payload->>'deleted' = 'true' (tombstone), so the audit of deletions is preserved.
+CREATE TABLE IF NOT EXISTS nuggets_current (
+    dataset TEXT NOT NULL,
+    username TEXT NOT NULL,
+    nugget_key TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (dataset, username, nugget_key)
+);
+
+ALTER TABLE nuggets_current ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'nuggets_current' AND policyname = 'Allow all for anon'
+    ) THEN
+        CREATE POLICY "Allow all for anon"
+            ON nuggets_current FOR ALL
+            USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS set_updated_at ON nuggets_current;
+CREATE TRIGGER set_updated_at
+    BEFORE UPDATE ON nuggets_current
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 """
 
 
@@ -686,51 +718,66 @@ def init_db() -> None:
               help="Supabase anon key")
 @click.option("--dataset", type=str, default=None,
               help="Filter by dataset name (exports all datasets if omitted)")
+@click.option("--table", type=click.Choice(["annotations_current", "nuggets_current"]),
+              default="annotations_current",
+              help="Which table to export (document judgments or the nugget journal)")
+@click.option("--include-deleted/--no-include-deleted", default=False,
+              help="Include tombstoned (deleted) nugget rows (nuggets_current only)")
 @click.option("--output", "-o", type=click.Path(), default=None,
               help="Output JSONL file (default: stdout)")
 def export_db(supabase_url: str, supabase_anon_key: str,
-              dataset: str | None, output: str | None) -> None:
-    """Export annotations from Supabase as JSONL."""
+              dataset: str | None, table: str, include_deleted: bool,
+              output: str | None) -> None:
+    """Export annotations or nuggets from Supabase as JSONL."""
     import urllib.error
     import urllib.parse
     import urllib.request
 
-    base = f"{supabase_url.rstrip('/')}/rest/v1/annotations_current"
-    params = {"select": "*", "order": "created_at.asc"}
-    if dataset:
-        params["dataset"] = f"eq.{dataset}"
-    url = f"{base}?{urllib.parse.urlencode(params)}"
-
-    req = urllib.request.Request(url, headers={
-        "apikey": supabase_anon_key,
-        "Authorization": f"Bearer {supabase_anon_key}",
-    })
-    try:
-        with urllib.request.urlopen(req) as resp:
-            rows = json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        click.echo(f"HTTP {e.code} {e.reason}", err=True)
-        raise SystemExit(1)
-
-    if not rows:
-        click.echo("No annotations found.", err=True)
-        return
+    base = f"{supabase_url.rstrip('/')}/rest/v1/{table}"
+    rows: list[dict] = []
+    page = 1000
+    offset = 0
+    while True:
+        params = {"select": "*", "order": "created_at.asc"}
+        if dataset:
+            params["dataset"] = f"eq.{dataset}"
+        url = f"{base}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={
+            "apikey": supabase_anon_key,
+            "Authorization": f"Bearer {supabase_anon_key}",
+            "Range-Unit": "items",
+            "Range": f"{offset}-{offset + page - 1}",
+        })
+        try:
+            with urllib.request.urlopen(req) as resp:
+                batch = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            click.echo(f"HTTP {e.code} {e.reason}", err=True)
+            raise SystemExit(1)
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
 
     lines = []
     for row in rows:
-        # Merge payload fields into top-level, keep metadata
-        record = row.get("payload", {})
-        record["dataset"] = row["dataset"]
-        record["username"] = row["username"]
-        record["annotation_key"] = row["annotation_key"]
-        record["created_at"] = row.get("created_at")
-        record["updated_at"] = row.get("updated_at")
+        # Payload holds the record; non-payload columns (keys, timestamps) overlay it.
+        record = dict(row.get("payload") or {})
+        for k, v in row.items():
+            if k != "payload":
+                record[k] = v
+        if table == "nuggets_current" and not include_deleted and record.get("deleted"):
+            continue
         lines.append(json.dumps(record, ensure_ascii=False))
+
+    if not lines:
+        click.echo("No rows found.", err=True)
+        return
 
     text = "\n".join(lines) + "\n"
     if output:
         Path(output).write_text(text, encoding="utf-8")
-        click.echo(f"Exported {len(rows)} annotations to {output}", err=True)
+        click.echo(f"Exported {len(lines)} rows from {table} to {output}", err=True)
     else:
         click.echo(text, nl=False)
 

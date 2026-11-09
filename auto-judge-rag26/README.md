@@ -51,6 +51,49 @@ The scripts then pick up `./.venv/bin/{python,auto-judge,autojudge-annotate}` au
    EXPORT_CLEAN=<release>/clean/evalbase/runs/autojudge ./make-rag26-nov-annotator.sh
    ```
 
+## Supabase sync (optional)
+
+The UI can back up annotations to Supabase. Sync is **one-way** (push/backup): work is
+uploaded, not restored on a fresh browser. The sync controls appear only when the build is
+given both credentials.
+
+1. **Create the tables once** (idempotent; safe to re-run):
+
+   ```sh
+   autojudge-annotate init-db     # prints SQL; paste into the Supabase SQL editor
+   ```
+
+   This creates `annotations_current` (document/report judgments) and `nuggets_current`
+   (the nugget change-journal: creates, edits, enable/disable, and deletes as tombstones),
+   each with a permissive anon RLS policy and an `updated_at` trigger.
+
+2. **Build with sync enabled** — the project URL defaults in the script; pass the anon
+   (publishable) key via the env. On NixOS, point `urllib` at the system CA bundle or TLS
+   verification fails:
+
+   ```sh
+   SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+   SUPABASE_ANON_KEY=sb_publishable_... \
+   EXPORT_CLEAN=<release>/clean/evalbase/runs/autojudge ./make-rag26-nov-annotator.sh
+   ```
+
+   Without `SUPABASE_ANON_KEY` the build is localStorage-only (the script says so on stderr).
+   Override the default project with `SUPABASE_URL`. Keep the key in `./.env.local`
+   (gitignored), never in git.
+
+3. **Pull the data back** (paginated; works on either table):
+
+   ```sh
+   SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+   autojudge-annotate export-db --table annotations_current \
+     --supabase-url "$SUPABASE_URL" --supabase-anon-key "$SUPABASE_ANON_KEY" -o annotations-archive.jsonl
+   autojudge-annotate export-db --table nuggets_current --include-deleted \
+     --supabase-url "$SUPABASE_URL" --supabase-anon-key "$SUPABASE_ANON_KEY" -o nuggets-archive.jsonl
+   ```
+
+   Exports are restricted-derived (they embed report/document text); `*annotations-archive-*.jsonl`
+   and `.env.local` are gitignored.
+
 ## Files
 
 | File | Role |

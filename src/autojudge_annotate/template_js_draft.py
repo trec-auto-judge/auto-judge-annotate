@@ -767,6 +767,16 @@ function commitNugget() {
         saveUserNuggets();
     }
 
+    // Record the change for Supabase sync. A text edit changes the md5-derived id/key, so
+    // it is represented as a tombstone of the old key plus an upsert of the new one.
+    if (typeof journalNuggetById === 'function') {
+        if (ds.originalNuggetId && ds.originalNuggetId !== nuggetId &&
+            typeof journalNuggetDeleteById === 'function') {
+            journalNuggetDeleteById(state.selectedTopic, ds.originalNuggetId, null);
+        }
+        journalNuggetById(state.selectedTopic, nuggetId);
+    }
+
     // Save impact grades under the new hash-based ID
     // BUT only if the text hasn't changed since Check Impact (ds.editingNuggetId matches nuggetId)
     // If user edited text after Check Impact, the grades are stale and shouldn't be stored

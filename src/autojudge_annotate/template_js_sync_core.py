@@ -21,6 +21,10 @@ JS_SYNC_CORE = r"""
 function createSyncManager(config) {
   var client = null;
   var mode = "offline";
+  // Table + key column default to the document-judgment table for backward compatibility.
+  // A second instance can target another table (e.g. nuggets_current / nugget_key).
+  var tableName = config.tableName || "annotations_current";
+  var keyColumn = config.keyColumn || "annotation_key";
   var debounceTimer = null;
   var inflight = false;
   var lastError = null;
@@ -75,14 +79,14 @@ function createSyncManager(config) {
     var username = record.username;
     if (!username) return false;
     var row = {
-      annotation_key: key,
       dataset: config.dataset,
       username: username,
       payload: record
     };
+    row[keyColumn] = key;
     var result = await client
-      .from("annotations_current")
-      .upsert(row, { onConflict: "dataset,username,annotation_key" });
+      .from(tableName)
+      .upsert(row, { onConflict: "dataset,username," + keyColumn });
     if (result.error) {
       lastError = result.error.message || JSON.stringify(result.error);
       return false;
@@ -95,7 +99,7 @@ function createSyncManager(config) {
     var username = config.getUsernameFn();
     if (!username) return false;
     var result = await client
-      .from("annotations_current")
+      .from(tableName)
       .delete()
       .eq("dataset", config.dataset)
       .eq("username", username);
