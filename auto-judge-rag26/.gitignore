@@ -1,0 +1,7 @@
+# Produced data is restricted-derived (merged banks, grades, the rendered report HTML)
+# and must never be committed; the local venv is machine-specific.
+.venv/
+rag26-nov-nuggets.jsonl
+rag26-nov-nugget-grades.jsonl
+rag26-nov-grades/
+rag26-nov-annotate.html

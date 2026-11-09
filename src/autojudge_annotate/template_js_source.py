@@ -493,11 +493,15 @@ function attachSourceSelectionHandler() {
             handleTextSelection(e, 'report');
         });
 
-        // Citation marker click handler
+        // Citation marker click handler. The active showCitationModal (template_js_init.py,
+        // which overrides the one below since JS_INIT is concatenated last) takes
+        // (report, citationId), so pass the currently-shown report, not just the docId.
         sourceText.addEventListener('click', function(e) {
             if (e.target.classList.contains('citation-marker')) {
                 var docId = e.target.dataset.docId;
-                showCitationModal(docId);
+                var report = reportIndex[state.selectedTopic] &&
+                             reportIndex[state.selectedTopic][state.selectedRun];
+                if (report) showCitationModal(report, docId);
             }
         });
     }
@@ -539,30 +543,9 @@ function addSpanToDraft(text, sourceType) {
     renderDraftSpans();
 }
 
-// Show citation document modal
-function showCitationModal(docId) {
-    if (!state.selectedTopic) return;
-
-    var doc = docIndex[state.selectedTopic] && docIndex[state.selectedTopic][docId];
-    if (!doc) {
-        modalTitle.textContent = 'Document: ' + docId;
-        modalText.textContent = 'Document not found.';
-        modalUrl.href = '';
-        modalUrl.textContent = '';
-    } else {
-        modalTitle.textContent = doc.title || docId;
-        modalText.textContent = doc.text || '';
-        if (doc.url) {
-            modalUrl.href = doc.url;
-            modalUrl.textContent = doc.url;
-        } else {
-            modalUrl.href = '';
-            modalUrl.textContent = '';
-        }
-    }
-
-    modalOverlay.classList.add('visible');
-}
+// showCitationModal lives in template_js_init.py (signature (report, citationId)); it is
+// concatenated last and is the single active definition. The former docId/docIndex copy
+// here was dead (overridden) and has been removed so a module reorder can't re-break it.
 
 // Close modal
 if (modalClose) {

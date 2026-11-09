@@ -22,6 +22,7 @@ from .template_js_llm import JS_LLM
 from .template_js_main import JS_MAIN
 from .template_js_spans import JS_SPANS
 from .template_js_init import JS_INIT
+from .template_js_debug import JS_DEBUG
 from .template_js_sync import JS_SYNC
 
 # Nugget-Centric UI v12 modules
@@ -65,5 +66,7 @@ HTML_TEMPLATE = (
     + JS_DRAFT + '\n'
     # Initialization (always last)
     + JS_INIT + '\n'
+    # Debug / inspectability: expose internals on window, self-check, reset button
+    + JS_DEBUG + '\n'
     + '})();\n</script>\n</body>\n</html>'
 )

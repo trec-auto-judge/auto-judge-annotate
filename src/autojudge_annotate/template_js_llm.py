@@ -404,6 +404,20 @@ function updateGradingProgress(nuggetId) {
 }
 
 // Grade a nugget against a single report
+// The grading system prompt embedded at compile time (generate --grading-prompt).
+// Questions use .system; avoid nuggets use the parallel .anti_system.
+function gradingSystemPrompt(isAvoidNugget) {
+  var gp = DATA.grading_prompt || {};
+  var sys = isAvoidNugget ? gp.anti_system : gp.system;
+  if (!sys) {
+    console.warn("No embedded grading prompt (DATA.grading_prompt." +
+      (isAvoidNugget ? "anti_system" : "system") + "); using a minimal fallback.");
+    sys = "Grade how well a passage answers a specific question on a 0-5 scale. " +
+          'Return JSON: {"grade": "<0-5>", "reasoning": "<brief>", "confidence": <0.0-1.0>}.';
+  }
+  return sys;
+}
+
 async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoidNugget) {
   var report = reportIndex[topicId] && reportIndex[topicId][runId];
   if (!report) return null;
@@ -419,37 +433,13 @@ async function gradeNuggetForReport(topicId, runId, nuggetId, nuggetText, isAvoi
     return null;
   }
 
-  // Build the grading prompt based on GradeNuggetAnswer signature
-  var systemPrompt = "Grade how well a passage answers a specific question.\n\n" +
-    "Can the question be answered based on the available context? Choose one:\n" +
-    "- 5: The answer is highly relevant, complete, and accurate.\n" +
-    "- 4: The answer is mostly relevant and complete but may have minor gaps or inaccuracies.\n" +
-    "- 3: The answer is partially relevant and complete, with noticeable gaps or inaccuracies.\n" +
-    "- 2: The answer has limited relevance and completeness, with significant gaps or inaccuracies.\n" +
-    "- 1: The answer is minimally relevant or complete, with substantial shortcomings.\n" +
-    "- 0: The answer is not relevant or complete at all.";
-
-  var prompt;
-  if (isAvoidNugget) {
-    prompt = "## Anti-Nugget (content to avoid)\n" + nuggetText + "\n\n";
-    prompt += "## Passage to evaluate\n" + passage.substring(0, 8000) + "\n\n"; // Truncate for token limits
-    prompt += "## Task\n";
-    prompt += "Check if the passage contains the problematic content described in the anti-nugget.\n";
-    prompt += "Grade 0 = content is NOT present (good), Grade 5 = content IS clearly present (bad).\n\n";
-  } else {
-    prompt = "## Question\n" + nuggetText + "\n\n";
-    prompt += "## Passage\n" + passage.substring(0, 8000) + "\n\n"; // Truncate for token limits
-    prompt += "## Task\n";
-    prompt += "Grade how well the passage answers the question.\n\n";
-  }
-
-  prompt += "Respond with JSON in this exact format:\n";
-  prompt += "{\n";
-  prompt += '  "grade": "0-5",\n';
-  prompt += '  "reasoning": "Brief explanation of the grade",\n';
-  prompt += '  "confidence": 0.0-1.0\n';
-  prompt += "}\n\n";
-  prompt += "Only respond with the JSON, no other text.";
+  // Grading prompt is chosen at compile time (generate --grading-prompt) and embedded
+  // in DATA.grading_prompt. System message = that prompt (rubric for questions,
+  // anti-nugget variant for avoid nuggets); the user payload mirrors the crucible judge:
+  // "QUESTION:/CONTENT TO AVOID:\n<nugget>\n\nPASSAGE:\n<passage>".
+  var systemPrompt = gradingSystemPrompt(isAvoidNugget);
+  var payloadLabel = isAvoidNugget ? "CONTENT TO AVOID" : "QUESTION";
+  var prompt = payloadLabel + ":\n" + nuggetText + "\n\nPASSAGE:\n" + passage.substring(0, 8000); // cap for token limits
 
   var result = await callLlm(prompt, systemPrompt);
   if (!result) return null;
@@ -974,37 +964,10 @@ async function gradeNuggetForDoc(topicId, docId, nuggetId, nuggetText, isAvoidNu
     return null;
   }
 
-  // Build the grading prompt (same as gradeNuggetForReport)
-  var systemPrompt = "Grade how well a passage answers a specific question.\n\n" +
-    "Can the question be answered based on the available context? Choose one:\n" +
-    "- 5: The answer is highly relevant, complete, and accurate.\n" +
-    "- 4: The answer is mostly relevant and complete but may have minor gaps or inaccuracies.\n" +
-    "- 3: The answer is partially relevant and complete, with noticeable gaps or inaccuracies.\n" +
-    "- 2: The answer has limited relevance and completeness, with significant gaps or inaccuracies.\n" +
-    "- 1: The answer is minimally relevant or complete, with substantial shortcomings.\n" +
-    "- 0: The answer is not relevant or complete at all.";
-
-  var prompt;
-  if (isAvoidNugget) {
-    prompt = "## Anti-Nugget (content to avoid)\n" + nuggetText + "\n\n";
-    prompt += "## Passage to evaluate\n" + passage.substring(0, 8000) + "\n\n";
-    prompt += "## Task\n";
-    prompt += "Check if the passage contains the problematic content described in the anti-nugget.\n";
-    prompt += "Grade 0 = content is NOT present (good), Grade 5 = content IS clearly present (bad).\n\n";
-  } else {
-    prompt = "## Question\n" + nuggetText + "\n\n";
-    prompt += "## Passage\n" + passage.substring(0, 8000) + "\n\n";
-    prompt += "## Task\n";
-    prompt += "Grade how well the passage answers the question.\n\n";
-  }
-
-  prompt += "Respond with JSON in this exact format:\n";
-  prompt += "{\n";
-  prompt += '  "grade": "0-5",\n';
-  prompt += '  "reasoning": "Brief explanation of the grade",\n';
-  prompt += '  "confidence": 0.0-1.0\n';
-  prompt += "}\n\n";
-  prompt += "Only respond with the JSON, no other text.";
+  // Same compile-time grading prompt as gradeNuggetForReport (DATA.grading_prompt).
+  var systemPrompt = gradingSystemPrompt(isAvoidNugget);
+  var payloadLabel = isAvoidNugget ? "CONTENT TO AVOID" : "QUESTION";
+  var prompt = payloadLabel + ":\n" + nuggetText + "\n\nPASSAGE:\n" + passage.substring(0, 8000); // cap for token limits
 
   var result = await callLlm(prompt, systemPrompt);
   if (!result) return null;

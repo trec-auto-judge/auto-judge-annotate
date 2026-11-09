@@ -1,0 +1,28 @@
+# Judge-only workflow for the rag26-nov annotator pre-grading.
+#
+# We do NOT edit the production workflow. This file reuses the production CrucibleJudge
+# class for the GRADING step only (no nugget creation, no pipeline) with our own settings,
+# and lives with the rag26-nov project so grading is self-contained.
+
+judge_class: "trec2026.judges.crucible.crucible_judge:CrucibleJudge"
+
+# Judge only: grade reports against the externally built nugget bank (--nugget-banks).
+create_nuggets: false
+create_qrels: false
+judge: true
+judge_uses_nuggets: true
+
+settings:
+  grade_threshold: 4          # a nugget counts as covered at grade >= this (prefnugget default)
+  grading_prompt: "rubric"    # our submission's rubric prompt (GRADING_PROMPTS in crucible_judge.py)
+  # Provenance label ONLY: it is recorded in the emitted measure names and does not select
+  # or filter the bank at grade time (the judge grades whatever --nugget-banks points at).
+  # The bank here is the merged union of all judges' rag26 banks, which has no
+  # used/should/vital/all derivation, so "used" would be misleading -- label it plainly.
+  bank_label: "merged"
+  reasoning_effort: medium    # matches the submitted rubric (cru-burn-*-medium)
+
+variants:
+  # grade-rag26-nov.sh runs --variant rubric, so the outputs are rubric.* .
+  rubric:
+    grading_prompt: "rubric"

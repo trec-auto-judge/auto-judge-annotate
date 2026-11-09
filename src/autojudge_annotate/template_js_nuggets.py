@@ -27,10 +27,19 @@ function getReportDocIds(report) {
 // Returns: {grade, reasoning, confidence} or null if no grade
 // All grades (preloaded + user-generated) are merged into userNuggetGrades at init
 function getReportGrade(topicId, runId, nuggetId) {
+  // The viewer's own grade wins; otherwise fall back to the preloaded grade embedded in
+  // DATA (preloaded grades are NOT copied into userNuggetGrades, to keep localStorage
+  // small -- see template_js_state.py).
   if (state.userNuggetGrades[topicId] &&
       state.userNuggetGrades[topicId][runId] &&
       state.userNuggetGrades[topicId][runId][nuggetId]) {
     return state.userNuggetGrades[topicId][runId][nuggetId];
+  }
+  if (DATA.nugget_grades &&
+      DATA.nugget_grades[topicId] &&
+      DATA.nugget_grades[topicId][runId] &&
+      DATA.nugget_grades[topicId][runId][nuggetId]) {
+    return DATA.nugget_grades[topicId][runId][nuggetId];
   }
   return null;
 }

@@ -1,0 +1,29 @@
+[project]
+name = "auto-judge-rag26"
+version = "0.1.0"
+description = "rag26-nov classroom annotator workflow: merge nuggets, grade all systems with our rubric, and build the annotation web UI."
+requires-python = ">=3.11"
+# Everything the three scripts here need, resolved to the local checkouts below:
+#   autojudge-annotate -> the `autojudge-annotate` CLI (+ autojudge-base: the merge module,
+#                         Report/document, the `auto-judge` grading CLI)
+#   trec2026-unh       -> the `trec2026` package the crucible judge workflow imports, and
+#                         (transitively) autojudge-evaluate + minima-llm
+dependencies = [
+    "autojudge-annotate",
+    "trec2026-unh",
+]
+
+# This is an application (scripts + data), not an importable package; uv builds a venv
+# for the dependencies without trying to build this directory.
+[tool.uv]
+package = false
+
+# Resolve every workspace package to its local checkout (none are on PyPI). trec2026-unh
+# names autojudge-base / autojudge-evaluate / minima-llm by name, so their sources must be
+# declared here too for this project to resolve them locally.
+[tool.uv.sources]
+autojudge-annotate = { path = "..", editable = true }
+trec2026-unh = { path = "../../trec2026-unh", editable = true }
+autojudge-base = { path = "../../auto-judge-base", editable = true }
+autojudge-evaluate = { path = "../../auto-judge-evaluate", editable = true }
+minima-llm = { path = "../../minima-llm", editable = true }

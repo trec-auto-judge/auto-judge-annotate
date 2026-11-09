@@ -161,58 +161,87 @@ if (savedUserGrades) {
   } catch(e) { state.userNuggetGrades = {}; }
 }
 
-// Merge preloaded grades into userNuggetGrades (user grades take precedence)
-// This ensures preloaded grades can be voided just like user grades
-if (DATA.nugget_grades) {
-  Object.keys(DATA.nugget_grades).forEach(function(topicId) {
-    if (!state.userNuggetGrades[topicId]) {
-      state.userNuggetGrades[topicId] = {};
-    }
-    Object.keys(DATA.nugget_grades[topicId] || {}).forEach(function(runId) {
-      if (!state.userNuggetGrades[topicId][runId]) {
-        state.userNuggetGrades[topicId][runId] = {};
-      }
-      Object.keys(DATA.nugget_grades[topicId][runId] || {}).forEach(function(nuggetId) {
-        // Only copy if user doesn't already have a grade
-        if (!state.userNuggetGrades[topicId][runId][nuggetId]) {
-          state.userNuggetGrades[topicId][runId][nuggetId] = DATA.nugget_grades[topicId][runId][nuggetId];
-        }
-      });
-    });
+// Preloaded grades are NOT merged into state.userNuggetGrades. They already live in
+// DATA.nugget_grades (embedded in the page, read-only) and getReportGrade falls back to
+// them, so state.userNuggetGrades holds only the viewer's OWN grades. Merging the
+// preloaded grades in and then persisting them would write the entire (potentially tens
+// of MB) grade set to localStorage and blow the quota -- which is exactly what broke
+// grading. User grades take precedence over the preloaded ones at read time.
+// (Voiding a preloaded grade would need a tombstone; not supported for now.)
+
+// localStorage holds the working copy of the nuggets so a viewer's edits persist.
+// But it must NOT silently shadow a freshly-built bank: if the built DATA.nugget_banks
+// differs from what was saved (a rebuild with a changed bank or a different id scheme),
+// the stale copy is discarded and we reseed from DATA. The fingerprint is a hash of the
+// BUILT bank's topic+nugget ids, computed before localStorage overwrites DATA, so an
+// id-scheme change (what caused the md5 migration) forces a reseed. Edits are kept only
+// while the built bank is unchanged (same fingerprint across reloads of the same file).
+var NUGGETS_KEY = "autojudge_annotate_user_nuggets_" + DATA.dataset;
+var NUGGETS_FP_KEY = "autojudge_annotate_user_nuggets_fp_" + DATA.dataset;
+
+function nuggetBanksFingerprint(banks) {
+  var ids = [];
+  Object.keys(banks || {}).forEach(function(t) {
+    var b = banks[t] || {};
+    (b.nuggets || []).forEach(function(n) { ids.push(t + "|q|" + n.nugget_id); });
+    (b.claims || []).forEach(function(c) { ids.push(t + "|c|" + c.claim_id); });
   });
+  ids.sort();
+  return (typeof md5 === "function") ? md5(ids.join("\n")) : String(ids.length);
 }
 
-// All nuggets are managed in localStorage. Preloaded nuggets seed the initial state.
-// On first load (no saved nuggets), copy preloaded nuggets to localStorage.
-// After that, localStorage is the source of truth.
-var savedUserNuggets = localStorage.getItem("autojudge_annotate_user_nuggets_" + DATA.dataset);
-if (savedUserNuggets) {
-  // Load from localStorage - this is the source of truth
+var builtNuggetsFingerprint = nuggetBanksFingerprint(DATA.nugget_banks);
+var savedUserNuggets = localStorage.getItem(NUGGETS_KEY);
+var savedNuggetsFingerprint = localStorage.getItem(NUGGETS_FP_KEY);
+
+if (savedUserNuggets && savedNuggetsFingerprint === builtNuggetsFingerprint) {
+  // Same bank the saved copy came from -> localStorage is the working source of truth.
   try {
-    var userNuggetsData = JSON.parse(savedUserNuggets);
-    // Replace DATA.nugget_banks with saved data
-    DATA.nugget_banks = userNuggetsData;
+    DATA.nugget_banks = JSON.parse(savedUserNuggets);
   } catch(e) {
-    console.error('Failed to load user nuggets:', e);
+    console.error('Failed to load user nuggets, reseeding from the built bank:', e);
+    localStorage.setItem(NUGGETS_KEY, JSON.stringify(DATA.nugget_banks));
+    localStorage.setItem(NUGGETS_FP_KEY, builtNuggetsFingerprint);
   }
 } else {
-  // First load - preloaded nuggets seed the user space
-  // DATA.nugget_banks already contains preloaded nuggets, so just save them
+  // First load, or the built bank changed since the saved copy -> (re)seed from DATA so
+  // a rebuilt bank / new id scheme is never shadowed by a stale local copy.
+  if (savedUserNuggets) {
+    console.warn('Nugget bank changed since last visit; resetting the local nugget copy ' +
+                 'to the newly built bank (previous local nugget edits for this dataset are discarded).');
+  }
   if (DATA.nugget_banks && Object.keys(DATA.nugget_banks).length > 0) {
-    localStorage.setItem("autojudge_annotate_user_nuggets_" + DATA.dataset, JSON.stringify(DATA.nugget_banks));
+    localStorage.setItem(NUGGETS_KEY, JSON.stringify(DATA.nugget_banks));
+    localStorage.setItem(NUGGETS_FP_KEY, builtNuggetsFingerprint);
+  }
+}
+
+// Guarded localStorage write: a QuotaExceededError (large datasets) must not break the
+// action that triggered the save -- warn once and continue (the in-memory state is still
+// correct for this session; it just will not persist across reload).
+function safeLocalSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.warn("localStorage write failed for " + key + " (" + e.name +
+      "); state kept in memory but not persisted. Consider 'Reset local data' " +
+      "or a smaller dataset.", e);
+    return false;
   }
 }
 
 // Save all nuggets to localStorage (called after any modification)
 function saveUserNuggets() {
   if (DATA.nugget_banks) {
-    localStorage.setItem("autojudge_annotate_user_nuggets_" + DATA.dataset, JSON.stringify(DATA.nugget_banks));
+    safeLocalSet("autojudge_annotate_user_nuggets_" + DATA.dataset, JSON.stringify(DATA.nugget_banks));
   }
 }
 
-// Save user nugget grades to localStorage
+// Save user nugget grades to localStorage (only the viewer's own grades -- preloaded
+// grades stay in DATA and are never persisted here, which keeps this well under quota).
 function saveUserNuggetGrades() {
-  localStorage.setItem("autojudge_annotate_grades_" + DATA.dataset, JSON.stringify(state.userNuggetGrades));
+  safeLocalSet("autojudge_annotate_grades_" + DATA.dataset, JSON.stringify(state.userNuggetGrades));
 }
 
 // Load saved user doc grades from localStorage
@@ -225,7 +254,7 @@ if (savedUserDocGrades) {
 
 // Save user doc grades to localStorage
 function saveUserDocGrades() {
-  localStorage.setItem("autojudge_annotate_docgrades_" + DATA.dataset, JSON.stringify(state.userDocGrades));
+  safeLocalSet("autojudge_annotate_docgrades_" + DATA.dataset, JSON.stringify(state.userDocGrades));
 }
 
 // Save phase to localStorage (called from setPhase in template_js_phase.py)

@@ -1,5 +1,6 @@
 """Generate a self-contained HTML annotation interface for AutoJudge reports."""
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -17,6 +18,7 @@ from autojudge_base.report import Report, load_report
 from autojudge_base.request import Request, load_requests_from_file
 
 from autojudge_annotate.template import HTML_TEMPLATE
+from autojudge_annotate.grading_prompts import GRADING_PROMPTS, DEFAULT_GRADING_PROMPT
 
 
 def _serialize_reports(reports: List[Report]) -> List[dict]:
@@ -134,6 +136,29 @@ def _load_nugget_grades(path: Path) -> List[dict]:
     return grades
 
 
+def _nugget_text_id(text: str) -> str:
+    """The content-derived nugget id: md5 of the nugget text.
+
+    This is the webui's own id for a hand-created nugget (``hashNuggetText``, blueimp
+    md5, which equals this byte-for-byte), and the id the flatten emits for grades
+    (``md5(question)``). Keying every nugget this way makes ids content-derived:
+    identical text collapses to one id, distinct text never collides, and grades line
+    up with cards with no reconciliation. It also sidesteps the bank's own
+    ``question_id`` values, which are not unique across merged submission banks.
+    """
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def _grade_nugget_id(g: dict) -> str:
+    """The nugget id for a grade record: md5 of its ``question`` text, so grades key the
+    same way as the cards (content-derived), independent of whatever ``nugget_id`` the
+    upstream file carried. Falls back to the record's own ``nugget_id`` only when it has
+    no ``question`` text to hash.
+    """
+    question = g.get("question", "")
+    return _nugget_text_id(question) if question else g.get("nugget_id", "")
+
+
 def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, dict]]]:
     """Serialize report-level nugget grades to nested dict.
 
@@ -147,7 +172,7 @@ def _serialize_nugget_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str
     for g in grades:
         query_id = g.get("query_id", "")
         run_id = g.get("run_id", "")
-        nugget_id = g.get("nugget_id", "")
+        nugget_id = _grade_nugget_id(g)
 
         if not query_id or not run_id or not nugget_id:
             continue
@@ -190,7 +215,7 @@ def _serialize_doc_grades(grades: List[dict]) -> Dict[str, Dict[str, Dict[str, d
     for g in grades:
         query_id = g.get("query_id", "")
         doc_id = g.get("doc_id", "")
-        nugget_id = g.get("nugget_id", "")
+        nugget_id = _grade_nugget_id(g)
 
         if not query_id or not doc_id or not nugget_id:
             continue
@@ -249,8 +274,8 @@ def _extract_nuggets_from_grades(grades: List[dict], is_doc_grades: bool = False
 
     for g in grades:
         query_id = g.get("query_id", "")
-        nugget_id = g.get("nugget_id", "")
         question = g.get("question", "")
+        nugget_id = _grade_nugget_id(g)
 
         if not query_id or not nugget_id:
             continue
@@ -273,7 +298,8 @@ def _extract_nuggets_from_grades(grades: List[dict], is_doc_grades: bool = False
     return result
 
 
-def _serialize_nugget_banks_as_dict(nugget_banks: Optional[NuggetBanks]) -> Dict[str, Dict[str, dict]]:
+def _serialize_nugget_banks_as_dict(nugget_banks: Optional[NuggetBanks],
+                                    include_claims: bool = False) -> Dict[str, Dict[str, dict]]:
     """Serialize nugget banks to nested dict keyed by topic_id -> nugget_id.
 
     Returns:
@@ -293,8 +319,12 @@ def _serialize_nugget_banks_as_dict(nugget_banks: Optional[NuggetBanks]) -> Dict
                     doc_ids = [ref.doc_id for ref in question.references]
                 # has_doc_info is True if we have doc_ids (nugget-docs format)
                 has_doc_info = len(doc_ids) > 0
-                result[topic_id][question.question_id] = {
-                    "nugget_id": question.question_id,
+                # Content-derived id (md5 of the text), not the bank's own question_id:
+                # the bank ids are not unique across merged submission banks, and this
+                # matches both the grade files and the webui's hand-created-nugget id.
+                nugget_id = _nugget_text_id(question.question)
+                result[topic_id][nugget_id] = {
+                    "nugget_id": nugget_id,
                     "text": question.question,
                     "importance": question.importance,
                     "quality": question.quality,
@@ -303,15 +333,20 @@ def _serialize_nugget_banks_as_dict(nugget_banks: Optional[NuggetBanks]) -> Dict
                     "has_doc_info": has_doc_info,
                 }
 
-        # Also add claims with claim_id as the key
-        if bank.claim_bank:
+        # Claims are omitted by default: banks are questions-only by policy, the judge
+        # grades only questions (crucible_judge skips non-NuggetQuestion), so a claim in a
+        # merged bank would render as an ungradeable "?" card. --include-claims surfaces
+        # them again (they will have no grades).
+        if include_claims and bank.claim_bank:
             for claim in bank.claim_bank.values():
                 doc_ids = []
                 if claim.references:
                     doc_ids = [ref.doc_id for ref in claim.references]
                 has_doc_info = len(doc_ids) > 0
-                result[topic_id][claim.claim_id] = {
-                    "nugget_id": claim.claim_id,  # Use nugget_id field for consistency
+                # Content-derived id (md5 of the text), as for questions above.
+                nugget_id = _nugget_text_id(claim.claim)
+                result[topic_id][nugget_id] = {
+                    "nugget_id": nugget_id,  # Use nugget_id field for consistency
                     "text": claim.claim,
                     "importance": claim.importance,
                     "quality": claim.quality,
@@ -419,6 +454,21 @@ def cli():
     default=None,
     help="Document grades file (JSONL) with per-doc/paragraph nugget grading results",
 )
+@click.option(
+    "--grading-prompt",
+    type=click.Choice(sorted(GRADING_PROMPTS.keys())),
+    default=DEFAULT_GRADING_PROMPT,
+    show_default=True,
+    help="Grading prompt the in-browser 'Grade All' uses, embedded at compile time "
+         "(mirrors the crucible judge's prompt of the same name)",
+)
+@click.option(
+    "--include-claims/--no-include-claims",
+    default=False,
+    show_default=True,
+    help="Render claim nuggets as cards. Off by default: banks are questions-only and the "
+         "judge grades only questions, so claims would show as ungradeable '?' cards",
+)
 def generate(
     rag_responses: Path,
     rag_topics: Path,
@@ -431,6 +481,8 @@ def generate(
     nugget_banks: Optional[Path],
     nugget_grades: Optional[Path],
     doc_grades: Optional[Path],
+    grading_prompt: str,
+    include_claims: bool,
 ) -> None:
     """Generate an HTML annotation interface from reports and topics."""
     # Load requests
@@ -484,6 +536,10 @@ def generate(
         )
         click.echo(f"Loaded {total_nuggets} nuggets across {len(loaded_nugget_banks.banks)} topics from {nugget_banks}")
 
+    # Nugget ids are content-derived (md5 of the text) on both sides -- the grade files
+    # emit md5(question) and the cards below are keyed by md5(text) -- so grades line up
+    # with cards with no reconciliation, and the bank's own non-unique ids are not used.
+
     # Load nugget grades if provided (report-level)
     serialized_grades: Dict[str, Dict[str, Dict[str, dict]]] = {}
     nuggets_from_grades: Dict[str, Dict[str, dict]] = {}
@@ -519,10 +575,18 @@ def generate(
                 # Merge flags: keep has_doc_info if already set
                 nugget["has_doc_info"] = merged_nuggets[topic_id][nid].get("has_doc_info", False)
             merged_nuggets.setdefault(topic_id, {})[nid] = nugget
-    # 3. Merge nugget banks (highest priority, may have additional metadata)
-    bank_nuggets = _serialize_nugget_banks_as_dict(loaded_nugget_banks)
+    # 3. Merge nugget banks (highest priority for metadata), but keep the
+    #    has_grades / has_doc_info flags already discovered from the grade files: a
+    #    bank entry serializes them as False, and now that grade ids are reconciled to
+    #    the bank ids a blind overwrite would reset a graded nugget to "no grades".
+    bank_nuggets = _serialize_nugget_banks_as_dict(loaded_nugget_banks, include_claims=include_claims)
     for topic_id, nuggets in bank_nuggets.items():
-        merged_nuggets.setdefault(topic_id, {}).update(nuggets)
+        for nid, nugget in nuggets.items():
+            existing = merged_nuggets.get(topic_id, {}).get(nid)
+            if existing:
+                nugget["has_grades"] = nugget.get("has_grades", False) or existing.get("has_grades", False)
+                nugget["has_doc_info"] = nugget.get("has_doc_info", False) or existing.get("has_doc_info", False)
+            merged_nuggets.setdefault(topic_id, {})[nid] = nugget
 
     # Convert to list format for JS
     final_nugget_banks = _convert_nugget_dict_to_list_format(merged_nuggets)
@@ -539,12 +603,23 @@ def generate(
         "doc_grades": serialized_doc_grades,
         "show_documents": show_documents,
         "dataset": dataset,
+        "grading_prompt": dict(GRADING_PROMPTS[grading_prompt], name=grading_prompt),
         "supabase_url": supabase_url or "",
         "supabase_anon_key": supabase_anon_key or "",
     }
+    click.echo(f"Live-grading prompt: {grading_prompt}")
 
-    # Inject into template
+    # Inject into template. Make the JSON safe to embed in an inline <script>: a literal
+    # "<" in the data (e.g. "</script>", "<script>", "<!--" from report HTML) can end or
+    # confuse the script block, and U+2028/U+2029 are legal in JSON but terminate a JS
+    # string literal. Escaping every "<" to < and the two separators to  /
+    # neutralizes all of them; these are valid inside a JS string and parse back identically.
     data_json = json.dumps(data, ensure_ascii=False, indent=None)
+    data_json = (
+        data_json.replace("<", "\\u003c")
+        .replace(" ", "\\u2028")
+        .replace(" ", "\\u2029")
+    )
     html = HTML_TEMPLATE.replace("/* __DATA_PLACEHOLDER__ */ null", data_json)
 
     output.parent.mkdir(parents=True, exist_ok=True)
