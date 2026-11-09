@@ -5,3 +5,6 @@ rag26-nov-nuggets.jsonl
 rag26-nov-nugget-grades.jsonl
 rag26-nov-grades/
 rag26-nov-annotate.html
+# Supabase export/archive snapshots (restricted-derived) and local secrets.
+*annotations-archive-*.jsonl
+.env.local

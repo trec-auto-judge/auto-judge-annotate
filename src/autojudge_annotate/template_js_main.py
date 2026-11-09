@@ -66,8 +66,8 @@ function attachAnnotationHandlers() {
   var syncBtn = document.getElementById("sync-btn");
   if (syncBtn && typeof syncAll === "function") {
     syncBtn.addEventListener("click", function() { syncAll(); });
-    // Hide if no supabase client (use typeof to avoid ReferenceError when not defined)
-    if (typeof supabaseClient === "undefined" || !supabaseClient) syncBtn.style.display = "none";
+    // Hide if no Supabase client (syncManager owns the client; guard with typeof to avoid ReferenceError)
+    if (typeof syncManager === "undefined" || !syncManager.hasClient()) syncBtn.style.display = "none";
   }
 
   // Call currentAnnotation() fresh on each event (matches how handleSelection() works for spans)

@@ -33,6 +33,14 @@ PY="${PY:-$HERE/.venv/bin/python}"; [ -x "$PY" ] || PY="python"
 ANNOTATE="${ANNOTATE:-$HERE/.venv/bin/autojudge-annotate}"; [ -x "$ANNOTATE" ] || ANNOTATE="autojudge-annotate"
 TOPIC_SEL="--topic rag2026-11 --topic rag2026-13 --topic rag2026-2 --topic rag2026-4"
 
+# Optional Supabase backup. The project URL is safe to default here; the anon key is a
+# secret (RLS-gated, but still kept out of git) -- supply it via the env, e.g.
+#   SUPABASE_ANON_KEY=... ./make-rag26-nov-annotator.sh
+# Sync controls appear in the UI only when BOTH are present. One-time table setup:
+#   autojudge-annotate init-db   (prints the SQL to run in the Supabase SQL editor)
+SUPABASE_URL="${SUPABASE_URL:-https://girzfanisjzkcdyaaqil.supabase.co}"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+
 # nltk >= 3.10 refuses a group/other-writable data dir and no longer has an env opt-out,
 # so make the existing data private (owner-only); no re-download needed.
 NLTK_HOME="${NLTK_DATA:-$HOME/nltk_data}"
@@ -55,6 +63,13 @@ fi
 grades_arg=""
 [ -f "$GRADES" ] && grades_arg="--nugget-grades $GRADES"
 
+supabase_arg=""
+if [ -n "$SUPABASE_ANON_KEY" ]; then
+  supabase_arg="--supabase-url $SUPABASE_URL --supabase-anon-key $SUPABASE_ANON_KEY"
+else
+  echo "note: SUPABASE_ANON_KEY unset -> building without server sync (localStorage only)" >&2
+fi
+
 # 3. Build the annotator HTML: four topics, the merged bank, and (if present) the grades.
 #    --grading-prompt picks the in-browser "Grade All" prompt (embedded at compile time);
 #    "rubric" matches the crucible rubric used for the pre-grades.
@@ -69,6 +84,7 @@ GRADING_PROMPT="${GRADING_PROMPT:-rubric}"
   $TOPIC_SEL \
   --nugget-banks "$NUGGETS" \
   --grading-prompt "$GRADING_PROMPT" \
-  $grades_arg
+  $grades_arg \
+  $supabase_arg
 
 echo "wrote $OUT"
